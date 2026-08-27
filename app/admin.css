@@ -1,0 +1,502 @@
+ html {
+   scroll-behavior: smooth;
+ }
+
+ /* ---------- TOPBAR ---------- */
+ .topbar {
+   background: var(--blackboard);
+   color: var(--chalk);
+   padding: 26px 28px;
+ }
+
+ .topbar-inner {
+   max-width: 1120px;
+   margin: 0 auto;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 20px;
+   flex-wrap: wrap;
+ }
+
+ .topbar h1 {
+   font-size: 24px;
+   display: flex;
+   align-items: center;
+   gap: 10px;
+ }
+
+ .topbar p {
+   margin-top: 6px;
+   font-size: 13.5px;
+   color: #c3d3c9;
+ }
+
+ .topbar-actions {
+   display: flex;
+   gap: 10px;
+   flex-wrap: wrap;
+ }
+
+ main {
+   padding: 40px 0 90px;
+ }
+
+ section.panel {
+   margin-bottom: 34px;
+ }
+
+ .wrap {
+   max-width: 1120px;
+ }
+
+ .card-head {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 14px;
+   margin-bottom: 20px;
+   flex-wrap: wrap;
+ }
+
+ .card-head h2 {
+   font-size: 18px;
+   display: flex;
+   align-items: center;
+   gap: 8px;
+ }
+
+ .card-head .actions {
+   display: flex;
+   gap: 10px;
+   flex-wrap: wrap;
+ }
+
+ .badge-count {
+   background: var(--yellow);
+   color: #5a4108;
+   font-size: 12px;
+   font-weight: 700;
+   padding: 2px 10px;
+   border-radius: 999px;
+   margin-left: 6px;
+ }
+
+ /* ---------- FORM ELEMENTS ---------- */
+ label.field-label {
+   display: block;
+   font-size: 12px;
+   font-weight: 700;
+   color: var(--ink-soft);
+   text-transform: uppercase;
+   letter-spacing: .03em;
+   margin: 0 0 6px;
+ }
+
+ .field {
+   margin-bottom: 14px;
+ }
+
+ .grid-2 {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 14px;
+ }
+
+ /* ---------- 3-COLUMN QUICK ACTIONS ---------- */
+ .grid-3 {
+   display: grid;
+   grid-template-columns: repeat(3, 1fr);
+   gap: 20px;
+ }
+
+ .upload-zone {
+   border: 2px dashed var(--paper-line);
+   border-radius: 12px;
+   padding: 26px 16px;
+   text-align: center;
+   cursor: pointer;
+   background: var(--paper);
+   transition: .15s ease;
+ }
+
+ .upload-zone:hover {
+   border-color: var(--coral);
+   background: #fdf3ee;
+ }
+
+ .upload-zone svg {
+   width: 26px;
+   height: 26px;
+   color: var(--coral);
+   margin: 0 auto 8px;
+ }
+
+ .upload-zone span {
+   font-size: 13.5px;
+   font-weight: 600;
+   color: var(--ink-soft);
+ }
+
+ .file-chip-row {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 8px;
+   margin-top: 12px;
+ }
+
+ .file-chip {
+   background: var(--paper);
+   border: 1.5px solid var(--paper-line);
+   border-radius: 999px;
+   padding: 6px 12px;
+   font-size: 12.5px;
+   font-weight: 600;
+   color: var(--ink-soft);
+   display: flex;
+   align-items: center;
+   gap: 6px;
+ }
+
+ /* ---------- LISTS ---------- */
+ .item-list {
+   display: flex;
+   flex-direction: column;
+   gap: 10px;
+   margin-top: 16px;
+ }
+
+ .list-item {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 12px;
+   background: var(--paper);
+   border: 1.5px solid var(--paper-line);
+   border-radius: 10px;
+   padding: 12px 14px;
+ }
+
+ .list-item .li-main {
+   display: flex;
+   flex-direction: column;
+   gap: 2px;
+   min-width: 0;
+ }
+
+ .list-item .li-title {
+   font-weight: 700;
+   font-size: 14px;
+   font-family: 'Baloo 2', sans-serif;
+   color: var(--ink);
+   overflow: hidden;
+   text-overflow: ellipsis;
+   white-space: nowrap;
+ }
+
+ .list-item .li-meta {
+   font-size: 12px;
+   color: var(--ink-soft);
+ }
+
+ .li-tag {
+   display: inline-block;
+   padding: 2px 9px;
+   border-radius: 999px;
+   font-size: 11px;
+   font-weight: 700;
+   background: #e7f0e9;
+   color: #2c4a3d;
+   margin-right: 6px;
+ }
+
+ .li-remove {
+   flex-shrink: 0;
+   width: 28px;
+   height: 28px;
+   border-radius: 50%;
+   border: none;
+   background: transparent;
+   color: var(--ink-soft);
+   cursor: pointer;
+   font-size: 16px;
+ }
+
+ .li-remove:hover {
+   background: #fdeade;
+   color: var(--coral);
+ }
+
+ .empty-state {
+   color: var(--ink-soft);
+   font-size: 13.5px;
+   padding: 18px 4px;
+   text-align: center;
+ }
+
+ /* ---------- TIMETABLE EDITOR ---------- */
+ .tt-scroll {
+   overflow-x: auto;
+   padding-bottom: 6px;
+ }
+
+ .tt-grid {
+   display: grid;
+   grid-template-columns: repeat(5, minmax(180px, 1fr));
+   gap: 14px;
+   min-width: 900px;
+ }
+
+ .tt-day {
+   background: var(--paper);
+   border: 1.5px solid var(--paper-line);
+   border-radius: 12px;
+   padding: 14px;
+ }
+
+ .tt-day h4 {
+   text-align: center;
+   font-size: 15px;
+   color: var(--blackboard);
+   margin-bottom: 10px;
+ }
+
+ .tt-buoi-label {
+   font-size: 11.5px;
+   font-weight: 700;
+   color: var(--coral);
+   text-transform: uppercase;
+   letter-spacing: .03em;
+   margin: 12px 0 8px;
+   display: flex;
+   align-items: center;
+   gap: 5px;
+ }
+
+ .tt-buoi-label.chieu {
+   color: var(--sky);
+ }
+
+ .tt-buoi-label:first-of-type {
+   margin-top: 0;
+ }
+
+ .tt-day select {
+   width: 100%;
+   margin-bottom: 7px;
+   padding: 8px 10px;
+   border-radius: 8px;
+   border: 1.5px solid var(--paper-line);
+   background: var(--chalk);
+   font-size: 12.5px;
+   color: var(--ink);
+   font-family: 'Be Vietnam Pro', sans-serif;
+ }
+
+ .save-toast {
+   display: inline-block;
+   margin-left: 10px;
+   font-size: 13px;
+   font-weight: 700;
+   color: #3f8a5c;
+   opacity: 0;
+   transition: opacity .25s ease;
+ }
+
+ .save-toast.show {
+   opacity: 1;
+ }
+
+ /* ---------- MANAGEMENT SECTIONS ---------- */
+ .manage-grid {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 20px;
+ }
+
+ footer.mini-footer {
+   text-align: center;
+   padding: 26px 28px;
+   color: var(--ink-soft);
+   font-size: 13px;
+ }
+
+ @media (max-width:860px) {
+   .grid-3 {
+     grid-template-columns: 1fr;
+   }
+
+   .grid-2 {
+     grid-template-columns: 1fr;
+   }
+
+   .manage-grid {
+     grid-template-columns: 1fr;
+   }
+ }
+
+ /* ============
+   RESPONSIVE 
+   =============*/
+
+ /* ---------- MOBILE (≤640px) ---------- */
+ @media (max-width: 640px) {
+
+   /* ----- TOPBAR ----- */
+   .topbar {
+     padding: 18px 16px;
+   }
+
+   .topbar h1 {
+     font-size: 19px;
+     gap: 8px;
+   }
+
+   .topbar p {
+     font-size: 12.5px;
+   }
+
+   .topbar-actions {
+     width: 100%;
+   }
+
+   .topbar-actions a,
+   .topbar-actions button {
+     flex: 1 1 auto;
+     text-align: center;
+     justify-content: center;
+   }
+
+   /* ----- MAIN / PANEL SPACING ----- */
+   main {
+     padding: 24px 0 60px;
+   }
+
+   section.panel {
+     margin-bottom: 22px;
+   }
+
+   /* ----- CARD HEAD ----- */
+   .card-head {
+     flex-direction: column;
+     align-items: flex-start;
+     gap: 10px;
+   }
+
+   .card-head .actions {
+     width: 100%;
+   }
+
+   .card-head .actions button,
+   .card-head .actions a {
+     flex: 1 1 auto;
+     text-align: center;
+     justify-content: center;
+   }
+
+   /* ----- FORM GRIDS ----- */
+   .grid-2 {
+     gap: 10px;
+   }
+
+   .grid-3 {
+     gap: 14px;
+   }
+
+   .manage-grid {
+     gap: 16px;
+   }
+
+   /* ----- UPLOAD ZONE ----- */
+   .upload-zone {
+     padding: 20px 12px;
+   }
+
+   .upload-zone svg {
+     width: 22px;
+     height: 22px;
+   }
+
+   .upload-zone span {
+     font-size: 13px;
+   }
+
+   .file-chip {
+     font-size: 12px;
+     padding: 5px 10px;
+   }
+
+   /* ----- ITEM LIST ----- */
+   .list-item {
+     flex-wrap: wrap;
+     padding: 11px 12px;
+   }
+
+   .list-item .li-main {
+     flex: 1 1 calc(100% - 40px);
+     /* chừa chỗ cho nút xoá */
+   }
+
+   .list-item .li-title {
+     font-size: 13.5px;
+   }
+
+   .list-item .li-meta {
+     font-size: 11.5px;
+   }
+
+   /* ----- TIMETABLE EDITOR ----- */
+   .tt-grid {
+     gap: 10px;
+     min-width: 760px;
+   }
+
+   .tt-day {
+     padding: 12px;
+   }
+
+   .tt-day h4 {
+     font-size: 14px;
+   }
+
+   .tt-day select {
+     font-size: 12px;
+     padding: 7px 9px;
+   }
+
+   .tt-buoi-label {
+     font-size: 11px;
+     margin: 10px 0 6px;
+   }
+
+   /* ----- FOOTER ----- */
+   footer.mini-footer {
+     padding: 20px 16px;
+     font-size: 12px;
+   }
+ }
+
+ /* ---------- MOBILE NHỎ (≤400px) ---------- */
+ @media (max-width: 400px) {
+   .topbar h1 {
+     font-size: 17px;
+   }
+
+   .badge-count {
+     font-size: 11px;
+     padding: 2px 8px;
+   }
+
+   .card-head h2 {
+     font-size: 16px;
+   }
+
+   .tt-grid {
+     min-width: 640px;
+   }
+
+   .li-tag {
+     font-size: 10px;
+     padding: 2px 7px;
+   }
+ }
