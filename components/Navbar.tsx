@@ -59,13 +59,6 @@ export default function Navbar() {
 
         {/* Nút hành động & Nút menu trên điện thoại */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <Link
-            href="/admin"
-            className="nav-cta btn-primary"
-            onClick={closeMenu}
-          >
-            Quản trị
-          </Link>
           <button
             className="menu-btn"
             id="menuBtn"

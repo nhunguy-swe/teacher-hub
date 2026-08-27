@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 export default function Footer() {
   return (
     <footer
@@ -65,26 +63,6 @@ export default function Footer() {
             Website tổng hợp tài liệu học tập, trò chơi và thông tin lớp học của
             cô Trúc dành cho phụ huynh và học sinh.
           </p>
-        </div>
-
-        {/* Nút Quản trị */}
-        <div>
-          <Link
-            href="/admin"
-            style={{
-              display: "inline-block",
-              fontSize: "13px",
-              fontWeight: 500,
-              color: "#e67e22",
-              background: "rgba(230, 126, 34, 0.1)",
-              border: "1px solid rgba(230, 126, 34, 0.3)",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              textDecoration: "none",
-            }}
-          >
-            🔐 Trang Quản Lý Giáo Viên
-          </Link>
         </div>
       </div>
 
