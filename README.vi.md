@@ -1,4 +1,5 @@
 # Teacher Hub
+[🇬🇧 ENGLISH](./README.md)
 
 Website hỗ trợ giáo viên quản lý và chia sẻ nội dung giảng dạy, tài liệu học tập và các thông tin dành cho học sinh.
 
@@ -6,9 +7,9 @@ Dự án được xây dựng với **Next.js**, **React**, **TypeScript** và *
 
 ---
 
-## ✨ Tính năng
+## Tính năng
 
-### 🌐 Trang người dùng
+### Trang người dùng
 
 * Trang chủ giới thiệu website.
 * Giới thiệu giáo viên.
@@ -22,7 +23,7 @@ Dự án được xây dựng với **Next.js**, **React**, **TypeScript** và *
 * Footer của website.
 * Giao diện responsive trên desktop, tablet và mobile.
 
-### 🔐 Trang Admin
+### Trang Admin
 
 Khu vực quản trị dành cho giáo viên hoặc quản trị viên.
 
@@ -38,7 +39,7 @@ Khu vực quản trị dành cho giáo viên hoặc quản trị viên.
 
 ---
 
-## 🛠️ Công nghệ sử dụng
+## Công nghệ sử dụng
 
 * **Next.js** - Framework React dùng để xây dựng ứng dụng web.
 * **React** - Thư viện xây dựng giao diện người dùng.
@@ -51,7 +52,7 @@ Khu vực quản trị dành cho giáo viên hoặc quản trị viên.
 
 ---
 
-## 📁 Cấu trúc thư mục
+## Cấu trúc thư mục
 
 Cấu trúc thư mục chính của dự án:
 
@@ -122,7 +123,7 @@ teacher-hub/
 
 ---
 
-## 🚀 Cài đặt
+## Cài đặt
 
 ### 1. Clone repository
 
@@ -158,7 +159,7 @@ http://localhost:3000
 
 ---
 
-## 🔑 Biến môi trường
+## Biến môi trường
 
 Nếu dự án sử dụng Firebase hoặc các dịch vụ bên ngoài, hãy tạo file `.env.local`.
 
@@ -177,7 +178,7 @@ File `.env.local` nên được thêm vào `.gitignore`.
 
 ---
 
-## 🧩 Kiến trúc Component
+## Kiến trúc Component
 
 Dự án được chia thành hai nhóm component chính.
 
@@ -219,7 +220,7 @@ Mỗi component Admin phụ trách một chức năng quản lý riêng.
 
 ---
 
-## 🔐 Admin
+## Admin
 
 Khu vực Admin được đặt tại `/admin`.
 
@@ -250,7 +251,7 @@ Các breakpoint và style responsive được quản lý thông qua Tailwind CSS
 
 ---
 
-## 📦 Build Production
+## Build Production
 
 Build project cho môi trường production:
 
@@ -266,7 +267,7 @@ npm start
 
 ---
 
-## ☁️ Deploy
+## Deploy
 
 Dự án được định hướng triển khai trên Vercel.
 
@@ -289,7 +290,7 @@ Khi deploy, cần cấu hình Environment Variables trên Vercel nếu dự án 
 
 ---
 
-## 🌱 Git Workflow
+## Git Workflow
 
 Các thay đổi có thể được commit bằng:
 
@@ -318,123 +319,13 @@ git commit -m "feat: add admin schedule management"
 
 ---
 
-## 🗺️ Roadmap
-
-### Website
-
-* [ ] Xây dựng giao diện trang chủ
-* [ ] Xây dựng Navbar
-* [ ] Xây dựng Hero
-* [ ] Xây dựng Announcement
-* [ ] Xây dựng Gallery
-* [ ] Xây dựng Games
-* [ ] Xây dựng Learning Materials
-* [ ] Xây dựng Schedule
-* [ ] Xây dựng Contact
-* [ ] Xây dựng FAQ
-* [ ] Responsive UI
-
-### Admin
-
-* [ ] Xây dựng khu vực Admin
-* [ ] Trang Login
-* [ ] Trang Forgot Password
-* [ ] Admin Dashboard
-* [ ] Admin Announcements
-* [ ] Admin Contact
-* [ ] Admin Gallery
-* [ ] Admin Games
-* [ ] Admin Materials
-* [ ] Admin Schedule
-
-### Backend
-
-* [ ] Kết nối Firebase Authentication
-* [ ] Kết nối Firebase Database
-* [ ] Kết nối Firebase Storage
-* [ ] Hoàn thiện phân quyền Admin
-* [ ] Hoàn thiện CRUD dữ liệu
-* [ ] Bảo mật dữ liệu
-* [ ] Validation dữ liệu
-
-### Deployment
-
-* [ ] Deploy lên Vercel
-* [ ] Cấu hình Environment Variables
-* [ ] Kết nối domain
-* [ ] Kiểm tra production
-
----
-
-# ⚠️ QUY ĐỊNH SỬ DỤNG
+# QUY ĐỊNH SỬ DỤNG
 
 > **NGHIÊM CẤM SỬ DỤNG DỰ ÁN NÀY DƯỚI BẤT KỲ HÌNH THỨC NÀO NẾU CHƯA ĐƯỢC SỰ CHO PHÉP CỦA CHỦ SỞ HỮU.**
 
 Dự án **Teacher Hub** là dự án cá nhân và toàn bộ mã nguồn, giao diện, thiết kế, nội dung, hình ảnh, tài liệu, cấu trúc thư mục, component và các thành phần liên quan thuộc quyền quản lý của chủ sở hữu.
 
 Việc repository được công khai không có nghĩa là mã nguồn được cấp phép sử dụng tự do.
-
-## 🚫 Không được phép
-
-Nếu chưa có sự cho phép của chủ sở hữu, bạn không được:
-
-* ❌ Sao chép toàn bộ hoặc một phần mã nguồn.
-* ❌ Sử dụng mã nguồn cho dự án cá nhân.
-* ❌ Sử dụng mã nguồn cho dự án thương mại.
-* ❌ Sao chép hoặc sử dụng giao diện của website.
-* ❌ Sao chép thiết kế, bố cục hoặc cấu trúc của website.
-* ❌ Sao chép hoặc tái sử dụng các component.
-* ❌ Chỉnh sửa mã nguồn rồi phát hành lại.
-* ❌ Đổi tên dự án rồi sử dụng như sản phẩm của riêng mình.
-* ❌ Phân phối hoặc chia sẻ mã nguồn.
-* ❌ Bán hoặc cung cấp mã nguồn cho bên thứ ba.
-* ❌ Đăng tải lại mã nguồn lên GitHub, GitLab, Bitbucket hoặc nền tảng khác.
-* ❌ Sử dụng mã nguồn trong sản phẩm, website hoặc ứng dụng khác.
-* ❌ Sử dụng hình ảnh, nội dung hoặc tài liệu của dự án cho dự án khác.
-* ❌ Sử dụng dự án để phát triển hoặc tích hợp vào sản phẩm khác nếu chưa được cho phép.
-* ❌ Nhận mình là tác giả hoặc chủ sở hữu của dự án.
-* ❌ Xóa hoặc thay đổi thông tin bản quyền để sử dụng lại dự án.
-* ❌ Sử dụng bất kỳ thành phần nào của dự án cho mục đích khác nếu chưa được cho phép.
-
-## 👁️ Quyền xem và tham khảo
-
-Việc truy cập repository chỉ nhằm mục đích xem và tham khảo thông tin dự án.
-
-Quyền truy cập repository không đồng nghĩa với việc bạn được cấp quyền sử dụng, sao chép, chỉnh sửa, phân phối, tái xuất bản hoặc thương mại hóa dự án.
-
-Không được sử dụng mã nguồn, giao diện, thiết kế, nội dung hoặc bất kỳ thành phần nào của dự án nếu chưa có sự cho phép của chủ sở hữu.
-
-## 🔒 Bảo lưu quyền
-
-Tất cả quyền đối với source code, UI/UX, thiết kế giao diện, component, nội dung, hình ảnh, tài liệu, cấu trúc hệ thống, tên dự án và các tài nguyên liên quan đều được bảo lưu.
-
-Các thành phần của bên thứ ba vẫn tuân theo giấy phép tương ứng của chủ sở hữu các thành phần đó.
-
-## 📩 Xin phép sử dụng
-
-Nếu bạn muốn sử dụng toàn bộ hoặc một phần của dự án, vui lòng liên hệ trực tiếp với chủ sở hữu để được xem xét và cấp phép.
-
-Không tự ý sử dụng dự án dưới bất kỳ hình thức nào.
-
----
-
-# © Copyright
-
-Bản quyền © 2026 **Teacher Hub**.
-
-Mọi quyền được bảo lưu.
-
-Không có quyền sử dụng, sao chép, sửa đổi, phân phối hoặc khai thác dự án nếu chưa được chủ sở hữu cho phép.
-
----
-
-## 📄 License
-
-**Không cấp giấy phép sử dụng.**
-
-Dự án này không được cấp phép cho việc sử dụng lại, chỉnh sửa, phân phối hoặc sử dụng cho mục đích thương mại.
-
-Tất cả quyền được bảo lưu bởi chủ sở hữu dự án.
 
 ---
 
