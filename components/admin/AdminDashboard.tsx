@@ -339,7 +339,7 @@ export default function AdminDashboard() {
 
           <div className="flex-1 w-full space-y-6 min-w-0 pt-0">
             {/* Sử dụng component AdminContact vừa tách */}
-            <section id="section-messages" className="panel scroll-mt-6">
+            <section id="section-messages" className="panel scroll-mt-12 lg:scroll-mt-6">
               <AdminContact
                 messages={messages}
                 onToggleStatus={handleToggleStatus}
@@ -347,23 +347,23 @@ export default function AdminDashboard() {
               />
             </section>
 
-            <section id="section-schedule" className="panel scroll-mt-6">
+            <section id="section-schedule" className="panel scroll-mt-12 lg:scroll-mt-6">
               <AdminSchedule />
             </section>
 
-            <section id="section-announcements" className="panel scroll-mt-6">
+            <section id="section-announcements" className="panel scroll-mt-12 lg:scroll-mt-6">
               <AdminAnnouncement onAdded={loadAllData} />
             </section>
 
-            <section id="section-materials" className="panel scroll-mt-6">
+            <section id="section-materials" className="panel scroll-mt-12 lg:scroll-mt-6">
               <AdminMaterials onAdded={loadAllData} />
             </section>
 
-            <section id="section-gallery" className="panel scroll-mt-6">
+            <section id="section-gallery" className="panel scroll-mt-12 lg:scroll-mt-6">
               <AdminGallery onAdded={loadAllData} />
             </section>
 
-            <section id="section-games" className="panel scroll-mt-6">
+            <section id="section-games" className="panel scroll-mt-12 lg:scroll-mt-6">
               <AdminGames onAdded={loadAllData} />
             </section>
           </div>
