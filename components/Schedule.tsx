@@ -78,7 +78,7 @@ export default function Schedule() {
     <section id="schedule">
       <div className="section-head" style={{ textAlign: "center" }}>
         <span className="kicker">Thời khóa biểu</span>
-        <h2>Lịch dạy lớp 3A</h2>
+        <h2>Lịch dạy lớp 4A4</h2>
         <p>
           Cập nhật theo tuần — phụ huynh có thể theo dõi để chuẩn bị đồ dùng học
           tập cho con.

@@ -1,5 +1,28 @@
 import type { Metadata } from "next";
+import { Be_Vietnam_Pro, Baloo_2, Mali } from "next/font/google";
 import "./globals.css";
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-be-vietnam-pro",
+  display: "swap",
+});
+
+const baloo2 = Baloo_2({
+  subsets: ["latin", "vietnamese"],
+  weight: ["500", "700", "800"],
+  variable: "--font-baloo-2",
+  display: "swap",
+});
+
+const mali = Mali({
+  subsets: ["latin", "vietnamese"],
+  weight: ["500", "700"],
+  variable: "--font-mali",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Lớp học cô Trúc",
@@ -12,20 +35,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Mali:wght@500;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html
+      lang="vi"
+      className={`${beVietnamPro.variable} ${baloo2.variable} ${mali.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

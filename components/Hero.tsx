@@ -30,7 +30,7 @@ export default function Hero() {
           <h1>
             Cô Trúc
             <br />
-            <span>Lớp ... – Trường Tiểu học ...</span>
+            <span>Lớp 4A4 – Trường Tiểu học số 1 Hoài Nhơn Đông</span>
           </h1>
           <p className="sub">
             Đây là góc nhỏ để phụ huynh và các con theo dõi bài học, tài liệu và
@@ -57,7 +57,7 @@ export default function Hero() {
             >
               <path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1 3-7z" />
             </svg>
-            Giáo viên chủ nhiệm lớp ...
+            Giáo viên chủ nhiệm lớp 4A4
           </div>
           <div className="badge-row">
             <svg
@@ -69,7 +69,7 @@ export default function Hero() {
               <rect x="3" y="4" width="18" height="16" rx="2" />
               <path d="M8 2v4M16 2v4M3 10h18" />
             </svg>
-            Giờ tư vấn: Thứ 3 & 5, 16h–17h
+            Giờ tư vấn: Thứ 2 & 6, 7h–17h
           </div>
           <div className="badge-row">
             <svg

@@ -71,7 +71,7 @@ export default function Contact() {
               <path d="M4 4h16v16H4z" />
               <path d="M22 6l-10 7L2 6" />
             </svg>
-            ...
+            thanhtrucqn96@gmail.com
           </div>
 
           <div className="contact-item">
@@ -86,12 +86,12 @@ export default function Contact() {
               <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z" />
               <circle cx="12" cy="10" r="3" />
             </svg>
-            ...
+            Trường tiểu học số 1 Hoài Nhơn Đông, Gia Lai
           </div>
 
           <div className="quick-connect">
             <a
-              href="https://zalo.me/"
+              href="https://zalo.me/g/zwtgkh332"
               target="_blank"
               rel="noopener noreferrer"
             >
