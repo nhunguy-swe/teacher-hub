@@ -48,8 +48,8 @@ An administration area for teachers or administrators.
 * **Tailwind CSS** - A CSS framework for building interfaces and responsive layouts.
 * **CSS** - Used for custom styling.
 * **JavaScript** - Used for client-side logic.
-* **Firebase** - Planned for Authentication, Database, and Storage.
-* **Vercel** - Planned for application deployment.
+* **Firebase** - Used for Authentication, Database, and Storage.
+* **Vercel** - Used for application deployment.
 
 ---
 
