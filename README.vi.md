@@ -47,8 +47,8 @@ Khu vực quản trị dành cho giáo viên hoặc quản trị viên.
 * **Tailwind CSS** - Framework CSS dùng để xây dựng giao diện và responsive.
 * **CSS** - Sử dụng cho các style tùy chỉnh.
 * **JavaScript** - Sử dụng cho logic phía client.
-* **Firebase** - Dự kiến sử dụng cho Authentication, Database và Storage.
-* **Vercel** - Dự kiến sử dụng để triển khai ứng dụng.
+* **Firebase** - Sử dụng cho Authentication, Database và Storage.
+* **Vercel** - Sử dụng để triển khai ứng dụng.
 
 ---
 
