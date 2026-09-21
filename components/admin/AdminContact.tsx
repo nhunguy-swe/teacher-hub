@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ToastProvider";
 
 interface ItemData {
   id: string;
@@ -26,9 +27,17 @@ export default function AdminContact({
   onToggleStatus,
   onDelete,
 }: AdminContactProps) {
+  const toast = useToast();
+
   const [activeTab, setActiveTab] = useState<"pending" | "resolved">("pending");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 3;
+
+  // State cho popup xác nhận xóa lời nhắn
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState<ItemData | null>(
+    null,
+  );
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const pendingMessages = messages.filter((item) => item.status !== "resolved");
   const resolvedMessages = messages.filter(
@@ -49,40 +58,61 @@ export default function AdminContact({
     setCurrentPage(1);
   };
 
+  // Lấy tên phụ huynh hiển thị, dùng chung cho danh sách và popup xác nhận
+  const getSenderName = (item: ItemData) =>
+    String(item.parentName || item.name || item.sender || "Phụ huynh ẩn danh");
+
+  // Xử lý xóa lời nhắn (được gọi từ popup xác nhận)
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteItem) return;
+    setDeletingId(confirmDeleteItem.id);
+    try {
+      await onDelete("contacts", confirmDeleteItem.id);
+      toast.success(
+        `Đã xóa lời nhắn của "${getSenderName(confirmDeleteItem)}"!`,
+      );
+    } catch (error) {
+      console.error("Lỗi khi xóa lời nhắn:", error);
+      toast.error("Xóa lời nhắn thất bại, vui lòng thử lại!");
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteItem(null);
+    }
+  };
+
   return (
-    <div className="bg-white/90 backdrop-blur-md p-6 rounded-3xl border border-amber-200/60 shadow-lg shadow-amber-950/5 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-amber-100">
+    <div className="bg-white p-6 rounded-3xl border border-amber-200 shadow-lg shadow-amber-950/5 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
         <h2 className="text-xl font-bold flex items-center gap-2.5 m-0 text-slate-800">
           <svg
+            className="text-amber-600"
             width="20"
             height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-amber-600"
           >
-            <path d="M4 4h16v16H4z" />
-            <path d="M22 6l-10 7L2 6" />
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+            <polyline points="22,6 12,13 2,6" />
           </svg>
           Lời nhắn từ phụ huynh
         </h2>
 
-        <div className="relative flex bg-amber-100/60 p-1 rounded-xl border border-amber-200/80 shadow-inner shrink-0 w-full sm:w-auto">
+        <div className="relative flex bg-slate-100 rounded-xl p-1 gap-1 border border-slate-200/65 shrink-0 w-full sm:w-85">
+          {/* Lớp nền trượt (Slider background) */}
           <div
-            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm border border-amber-200/50 transition-all duration-300 ease-in-out ${
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-2xs transition-all duration-300 ease-in-out ${
               activeTab === "pending" ? "left-1" : "left-[calc(50%+2px)]"
             }`}
           />
 
           <button
             onClick={() => handleTabChange("pending")}
-            className={`relative z-10 flex-1 sm:flex-none px-4 py-2 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1.5 ${
+            className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors duration-300 cursor-pointer flex items-center justify-center gap-1.5 ${
               activeTab === "pending"
-                ? "text-emerald-700"
-                : "text-slate-600 hover:text-slate-900"
+                ? "text-amber-700"
+                : "text-slate-500 hover:text-slate-700"
             }`}
           >
             <svg
@@ -97,13 +127,13 @@ export default function AdminContact({
             >
               <path d="M22 12h-6l-2 3h-4l-2-3H2" />
               <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
-            </svg>{" "}
+            </svg>
             Chưa giải quyết
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 activeTab === "pending"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-200/80 text-slate-600"
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-slate-200/80 text-slate-500"
               }`}
             >
               {pendingMessages.length}
@@ -112,10 +142,10 @@ export default function AdminContact({
 
           <button
             onClick={() => handleTabChange("resolved")}
-            className={`relative z-10 flex-1 sm:flex-none px-4 py-2 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-1.5 ${
+            className={`relative z-10 flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors duration-300 cursor-pointer flex items-center justify-center gap-1.5 ${
               activeTab === "resolved"
-                ? "text-emerald-700"
-                : "text-slate-600 hover:text-slate-900"
+                ? "text-amber-700"
+                : "text-slate-500 hover:text-slate-700"
             }`}
           >
             <svg
@@ -130,13 +160,13 @@ export default function AdminContact({
             >
               <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>{" "}
+            </svg>
             Đã giải quyết
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                 activeTab === "resolved"
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-200/80 text-slate-600"
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-slate-200/80 text-slate-500"
               }`}
             >
               {resolvedMessages.length}
@@ -147,7 +177,14 @@ export default function AdminContact({
 
       <div className="item-list">
         {displayedMessages.length === 0 ? (
-          <div className="py-8 text-center text-slate-500 bg-white/50 rounded-2xl border border-dashed border-slate-200 transition-all duration-300 flex flex-col items-center gap-2">
+          <div
+            className="py-8 text-center rounded-3xl border border-dashed flex flex-col items-center gap-2 text-sm font-medium transition-all duration-300"
+            style={{
+              background: "var(--chalk)",
+              borderColor: "var(--paper-line)",
+              color: "var(--ink-soft)",
+            }}
+          >
             {activeTab === "pending" ? (
               <>
                 <svg
@@ -174,12 +211,7 @@ export default function AdminContact({
           <div className="space-y-4">
             <div className="space-y-3 transition-all duration-300 ease-in-out">
               {currentItems.map((item) => {
-                const senderName = String(
-                  item.parentName ||
-                    item.name ||
-                    item.sender ||
-                    "Phụ huynh ẩn danh",
-                );
+                const senderName = getSenderName(item);
                 const studentInfo = String(
                   item.studentInfo ||
                     item.subject ||
@@ -192,7 +224,7 @@ export default function AdminContact({
                 return (
                   <div
                     key={item.id}
-                    className={`p-4 sm:p-5 border rounded-2xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300 ease-out transform ${
+                    className={`p-4 sm:p-5 border rounded-3xl  shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 transition-all duration-300 ease-out transform ${
                       isResolved
                         ? "bg-slate-50/80 border-slate-200 opacity-75"
                         : "bg-white border-slate-200/80 hover:shadow-md hover:border-amber-300/60"
@@ -261,13 +293,18 @@ export default function AdminContact({
                     </div>
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                       <button
-                        onClick={() =>
-                          onToggleStatus(item.id, item.status || "pending")
-                        }
+                        onClick={() => {
+                          onToggleStatus(item.id, item.status || "pending");
+                          toast.success(
+                            isResolved
+                              ? "Đã hoàn tác trạng thái lời nhắn!"
+                              : "Đã đánh dấu lời nhắn là hoàn thành!",
+                          );
+                        }}
                         className={`px-3.5 py-2 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 shadow-2xs ${
                           isResolved
-                            ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                            : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white"
+                            ? "text-amber-700 bg-amber-50 hover:bg-amber-600 hover:text-white border border-amber-200 "
+                            : "text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200"
                         }`}
                       >
                         {isResolved ? (
@@ -301,8 +338,8 @@ export default function AdminContact({
                         {isResolved ? "Hoàn tác" : "Đã xong"}
                       </button>
                       <button
-                        onClick={() => onDelete("contacts", item.id)}
-                        className="text-red-700 hover:text-white bg-rose-50 hover:bg-red-600 text-xs px-3.5 py-2 border border-red-200 rounded-xl transition-all font-semibold shadow-2xs"
+                        onClick={() => setConfirmDeleteItem(item)}
+                        className="px-3.5 py-2 text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-2xs flex items-center gap-1.5"
                       >
                         Xóa
                       </button>
@@ -313,7 +350,7 @@ export default function AdminContact({
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 mt-2 border-t border-amber-100 px-2 transition-all duration-300">
+              <div className="flex items-center justify-between pt-4 mt-2 border-t border-slate-100  px-2 transition-all duration-300">
                 <span className="text-xs text-slate-500 font-medium">
                   Trang{" "}
                   <span className="font-bold text-slate-700">
@@ -333,7 +370,7 @@ export default function AdminContact({
                         : "bg-white text-slate-700 border-amber-200 hover:bg-amber-100 hover:text-amber-900 active:scale-95"
                     }`}
                   >
-                    ◀ Trước
+                    <span>&lt;</span>
                   </button>
                   <button
                     onClick={() =>
@@ -346,7 +383,7 @@ export default function AdminContact({
                         : "bg-white text-slate-700 border-amber-200 hover:bg-amber-100 hover:text-amber-900 active:scale-95"
                     }`}
                   >
-                    Sau ▶
+                    <span>&gt;</span>
                   </button>
                 </div>
               </div>
@@ -354,6 +391,47 @@ export default function AdminContact({
           </div>
         )}
       </div>
+
+      {/* POPUP XÁC NHẬN XÓA LỜI NHẮN */}
+      {confirmDeleteItem && (
+        <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-xl">
+              ⚠️
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                Xóa lời nhắn?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Bạn có chắc muốn xóa lời nhắn của{" "}
+                <strong className="text-slate-800">
+                  &quot;{getSenderName(confirmDeleteItem)}&quot;
+                </strong>{" "}
+                không? Hành động này không thể hoàn tác.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteItem(null)}
+                disabled={deletingId === confirmDeleteItem.id}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deletingId === confirmDeleteItem.id}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all shadow-2xs cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {deletingId === confirmDeleteItem.id ? "Đang xóa..." : "Xóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

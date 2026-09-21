@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { db } from "@/lib/firebase";
+import { useToast } from "@/components/ToastProvider";
 import {
   collection,
   addDoc,
@@ -24,38 +25,160 @@ interface MaterialItem {
   category: "homework" | "slide";
 }
 
+type Category = "homework" | "slide";
+
+const DEFAULT_SUBJECTS = [
+  "Môn Toán",
+  "Môn Tiếng Việt",
+  "Môn Tiếng Anh",
+  "Môn Tự nhiên & Xã hội",
+  "Kỹ năng sống",
+];
+const DEFAULT_DESCRIPTION = "Tài liệu ôn tập và hỗ trợ học tập cho học sinh.";
+
+const inputCls =
+  "w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium placeholder:text-slate-300 focus:outline-none focus:border-amber-400";
+const inputCustomCls =
+  "w-full px-3.5 py-2.5 bg-white border border-amber-500 rounded-xl text-slate-800 font-medium placeholder:text-slate-300 focus:outline-none";
+const labelCls = "font-semibold text-slate-600 block mb-1";
+const closeBtnCls =
+  "text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer";
+const btnAmber =
+  "px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap";
+const btnRose =
+  "px-3.5 py-2 text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap";
+const btnGray =
+  "px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5";
+const searchCls =
+  "w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500 font-medium transition-colors";
+const selectCls =
+  "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none";
+
+const BookIcon = ({ size = 14 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="shrink-0"
+  >
+    <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+  </svg>
+);
+
+const SlideIcon = ({ size = 14 }: { size?: number }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="shrink-0"
+  >
+    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+    <line x1="8" y1="21" x2="16" y2="21" />
+    <line x1="12" y1="17" x2="12" y2="21" />
+  </svg>
+);
+
+// Thanh chuyển tab dạng pill trượt (dùng cho cả form đăng và danh sách)
+function CategoryPill({
+  value,
+  onChange,
+  counts,
+}: {
+  value: Category;
+  onChange: (c: Category) => void;
+  counts?: Record<Category, number>;
+}) {
+  const items: { key: Category; label: string; icon: React.ReactNode }[] = [
+    { key: "slide", label: "Slide bài giảng", icon: <SlideIcon /> },
+    { key: "homework", label: "Bài tập", icon: <BookIcon /> },
+  ];
+  return (
+    <div className="relative grid grid-cols-2 bg-slate-100 p-1 rounded-xl border border-slate-200/65 gap-1 w-full">
+      <div
+        className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-2xs transition-all duration-300 ease-in-out ${
+          value === "slide" ? "left-1" : "left-[calc(50%+2px)]"
+        }`}
+      />
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          onClick={() => onChange(it.key)}
+          className={`relative z-10 px-2 sm:px-4 py-2.5 text-[11px] sm:text-xs font-bold rounded-lg transition-colors duration-300 cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 ${
+            value === it.key
+              ? "text-amber-700"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          {it.icon}
+          <span>{it.label}</span>
+          {counts && (
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none font-bold ${
+                value === it.key
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-slate-200/80 text-slate-500"
+              }`}
+            >
+              {counts[it.key]}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AdminMaterials({ onAdded }: { onAdded: () => void }) {
+  const toast = useToast();
+  const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Tab đang xem + bộ lọc
+  const [activeTab, setActiveTab] = useState<Category>("slide");
+  const [search, setSearch] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+
+  // Modal thêm mới
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("Môn Toán");
   const [customSubject, setCustomSubject] = useState("");
   const [grade, setGrade] = useState("3");
-  const [description, setDescription] = useState(
-    "Tài liệu ôn tập và hỗ trợ học tập cho học sinh.",
-  );
+  const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [link, setLink] = useState("");
-  const [category, setCategory] = useState<"homework" | "slide">("homework"); // Tab đang chọn để đăng
-  const [activeTab, setActiveTab] = useState<"homework" | "slide">("homework"); // Tab đang xem danh sách
+  const [category, setCategory] = useState<Category>("slide");
 
-  const [loading, setLoading] = useState(false);
-  const [materials, setMaterials] = useState<MaterialItem[]>([]);
+  // Modal xóa nhanh
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteSearch, setDeleteSearch] = useState("");
 
-  // State phân trang và hiệu ứng
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const itemsPerPage = 3;
-
-  // State quản lý Modal chỉnh sửa
+  // Modal chỉnh sửa
   const [editItem, setEditItem] = useState<MaterialItem | null>(null);
   const [isEditCustom, setIsEditCustom] = useState(false);
   const [editCustomSubject, setEditCustomSubject] = useState("");
 
-  const defaultSubjects = [
-    "Môn Toán",
-    "Môn Tiếng Việt",
-    "Môn Tiếng Anh",
-    "Môn Tự nhiên & Xã hội",
-    "Kỹ năng sống",
-  ];
+  // Popup xác nhận xóa 1 tài liệu
+  const [confirmDeleteItem, setConfirmDeleteItem] =
+    useState<MaterialItem | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Popup xác nhận xóa hàng loạt (đè lên trên modal Xóa nhanh)
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "materials"), orderBy("createdAt", "desc"));
@@ -67,68 +190,85 @@ export default function AdminMaterials({ onAdded }: { onAdded: () => void }) {
     return () => unsubscribe();
   }, []);
 
-  const handlePageChange = (newIndex: number) => {
-    setIsAnimating(true);
-    setTimeout(() => {
-      setCurrentIndex(newIndex);
-      setIsAnimating(false);
-    }, 150);
-  };
+  const counts = useMemo(
+    () => ({
+      homework: materials.filter(
+        (i) => (i.category || "homework") === "homework",
+      ).length,
+      slide: materials.filter((i) => i.category === "slide").length,
+    }),
+    [materials],
+  );
 
-  // Lọc danh sách theo tab đang xem
-  const filteredMaterials = materials.filter(
-    (item) => (item.category || "homework") === activeTab,
-  );
-  const visibleMaterials = filteredMaterials.slice(
-    currentIndex,
-    currentIndex + itemsPerPage,
-  );
+  const filtered = useMemo(() => {
+    const result = materials.filter(
+      (m) =>
+        (m.category || "homework") === activeTab &&
+        (gradeFilter === "all" || String(m.grade || "3") === gradeFilter) &&
+        m.title.toLowerCase().includes(search.toLowerCase().trim()),
+    );
+    if (sortBy === "title-asc")
+      result.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sortBy === "title-desc")
+      result.sort((a, b) => b.title.localeCompare(a.title));
+    else if (sortBy === "grade")
+      result.sort(
+        (a, b) =>
+          Number(a.grade || 3) - Number(b.grade || 3) ||
+          a.title.localeCompare(b.title),
+      );
+    return result;
+  }, [materials, activeTab, gradeFilter, search, sortBy]);
+
+  const resetAddForm = () => {
+    setTitle("");
+    setLink("");
+    setSubject("Môn Toán");
+    setCustomSubject("");
+    setGrade("3");
+    setDescription(DEFAULT_DESCRIPTION);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!link.startsWith("http")) {
-      alert(
+      toast.warning(
         "Vui lòng dán link Google Drive hợp lệ (phải bắt đầu bằng http hoặc https)",
       );
       return;
     }
-
     const finalSubject = subject === "Khác" ? customSubject.trim() : subject;
-    if (subject === "Khác" && !finalSubject) {
-      alert("Vui lòng nhập tên môn học tùy chỉnh!");
+    if (!finalSubject) {
+      toast.warning("Vui lòng nhập tên môn học tùy chỉnh!");
       return;
     }
 
     setLoading(true);
     try {
       await addDoc(collection(db, "materials"), {
-        title,
+        title: title.trim(),
         subject: finalSubject,
         grade,
         description,
-        link,
+        link: link.trim(),
         category,
         createdAt: serverTimestamp(),
       });
-      setTitle("");
-      setLink("");
-      setSubject("Môn Toán");
-      setCustomSubject("");
-      setGrade("3");
-      setDescription("Tài liệu ôn tập và hỗ trợ học tập cho học sinh.");
-      setCurrentIndex(0);
-      alert("✅ Đã đăng tài liệu thành công!");
+      toast.success("Đã đăng tài liệu thành công!");
+      setActiveTab(category);
+      resetAddForm();
+      setAddModalOpen(false);
       onAdded();
     } catch (err) {
       console.error(err);
-      alert("❌ Lỗi khi đăng bài");
+      toast.error("Lỗi khi đăng bài");
     } finally {
       setLoading(false);
     }
   };
 
   const handleOpenEdit = (item: MaterialItem) => {
-    if (defaultSubjects.includes(item.subject)) {
+    if (DEFAULT_SUBJECTS.includes(item.subject)) {
       setEditItem(item);
       setIsEditCustom(false);
       setEditCustomSubject("");
@@ -144,46 +284,136 @@ export default function AdminMaterials({ onAdded }: { onAdded: () => void }) {
     const finalSubject = isEditCustom
       ? editCustomSubject.trim()
       : editItem.subject;
-    if (isEditCustom && !finalSubject) {
-      alert("Vui lòng nhập tên môn học tùy chỉnh!");
+    if (!finalSubject) {
+      toast.warning("Vui lòng nhập tên môn học tùy chỉnh!");
+      return;
+    }
+    if (!editItem.title.trim() || !editItem.link.trim()) {
+      toast.warning("Vui lòng điền đầy đủ thông tin!");
       return;
     }
 
+    setLoading(true);
     try {
       await updateDoc(doc(db, "materials", editItem.id), {
-        title: editItem.title,
+        title: editItem.title.trim(),
         subject: finalSubject,
         grade: editItem.grade || "3",
         description: editItem.description || "",
-        link: editItem.link,
+        link: editItem.link.trim(),
         category: editItem.category || "homework",
       });
       setEditItem(null);
-      alert("✅ Đã cập nhật tài liệu thành công!");
+      toast.success("Đã cập nhật tài liệu thành công!");
     } catch (err) {
       console.error(err);
-      alert("❌ Lỗi khi cập nhật tài liệu");
+      toast.error("Lỗi khi cập nhật tài liệu");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa tài liệu này?")) return;
+  // Xóa 1 tài liệu (được gọi từ popup xác nhận)
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteItem) return;
+    setDeletingId(confirmDeleteItem.id);
     try {
-      await deleteDoc(doc(db, "materials", id));
-      alert("✅ Đã xóa tài liệu thành công!");
+      await deleteDoc(doc(db, "materials", confirmDeleteItem.id));
+      toast.success(`Đã xóa tài liệu "${confirmDeleteItem.title}"!`);
       onAdded();
     } catch (err) {
       console.error(err);
-      alert("❌ Lỗi khi xóa tài liệu");
+      toast.error("Lỗi khi xóa tài liệu");
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteItem(null);
+    }
+  };
+
+  // Bấm "Xóa các mục đã chọn" trong modal Xóa nhanh → mở popup xác nhận cuối cùng
+  const handleRequestBatchDelete = () => {
+    if (selectedIds.length === 0) return;
+    setConfirmBatchDelete(true);
+  };
+
+  // Xóa hàng loạt sau khi đã xác nhận
+  const handleConfirmBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBatchDeleting(true);
+    try {
+      const count = selectedIds.length;
+      await Promise.all(
+        selectedIds.map((id) => deleteDoc(doc(db, "materials", id))),
+      );
+      toast.success(`Đã xóa ${count} tài liệu!`);
+      setDeleteModalOpen(false);
+      setSelectedIds([]);
+      onAdded();
+    } catch (err) {
+      console.error(err);
+      toast.error("Có lỗi xảy ra khi xóa tài liệu.");
+    } finally {
+      setBatchDeleting(false);
+      setConfirmBatchDelete(false);
+    }
+  };
+
+  const deleteList = materials.filter((m) =>
+    m.title.toLowerCase().includes(deleteSearch.toLowerCase().trim()),
+  );
+  const allDeleteSelected =
+    deleteList.length > 0 &&
+    deleteList.every((m) => selectedIds.includes(m.id));
+
+  const toggleSelectAll = () => {
+    const ids = deleteList.map((m) => m.id);
+    if (allDeleteSelected) {
+      setSelectedIds(selectedIds.filter((id) => !ids.includes(id)));
+    } else {
+      setSelectedIds(Array.from(new Set([...selectedIds, ...ids])));
     }
   };
 
   return (
-    <div className="bg-white/90 p-6 rounded-3xl border border-amber-200/60 shadow-lg shadow-amber-950/5 space-y-6">
-      {/* Form đăng tài liệu */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="card-head">
-          <h2 className="text-base font-bold text-slate-700 flex items-center gap-2">
+    <div className="bg-white p-6 rounded-3xl border border-amber-200 shadow-lg shadow-amber-950/5 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
+        <h2 className="text-xl font-bold flex items-center gap-2.5 m-0 text-slate-800">
+          <span className="text-amber-600">
+            <BookIcon size={20} />
+          </span>
+          Tài liệu (Google Drive)
+        </h2>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => {
+              setCategory(activeTab);
+              setAddModalOpen(true);
+            }}
+            className={btnAmber}
+          >
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Thêm tài liệu
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteModalOpen(true)}
+            className={btnRose}
+          >
             <svg
               width="16"
               height="16"
@@ -193,521 +423,621 @@ export default function AdminMaterials({ onAdded }: { onAdded: () => void }) {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="text-amber-600"
             >
-              <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
             </svg>
-            Đăng tài liệu (Google Drive)
-          </h2>
-        </div>
-
-        {/* Chọn danh mục đăng - dạng pill trượt đồng bộ với tab bên dưới */}
-        <div className="relative grid grid-cols-2 bg-amber-100/60 p-1 rounded-xl border border-amber-200/80 shadow-inner">
-          <div
-            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm border border-amber-200/50 transition-all duration-300 ease-in-out ${
-              category === "homework" ? "left-1" : "left-[calc(50%+2px)]"
-            }`}
-          />
-
-          <button
-            type="button"
-            onClick={() => setCategory("homework")}
-            className={`relative z-10 px-4 py-2.5 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-2 ${
-              category === "homework"
-                ? "text-emerald-700"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
-            >
-              <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-            </svg>
-            <span>Bài tập</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setCategory("slide")}
-            className={`relative z-10 px-4 py-2.5 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-2 ${
-              category === "slide"
-                ? "text-emerald-700"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
-            >
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-            </svg>
-            <span>Slide bài giảng</span>
+            Xóa nhanh
           </button>
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">
-              Khối lớp
-            </label>
-            <select
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-              className="w-full p-3 bg-white border border-[#E7DFCE] rounded-xl text-slate-700 text-sm focus:outline-none focus:border-amber-500 transition"
-            >
-              {[1, 2, 3, 4, 5].map((g) => (
-                <option key={g} value={g}>
-                  Lớp {g}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Môn học</label>
-            <select
-              className="w-full p-3 bg-white border border-[#E7DFCE] rounded-xl text-slate-700 text-sm focus:outline-none focus:border-amber-500 transition"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-            >
-              {defaultSubjects.map((sub) => (
-                <option key={sub} value={sub}>
-                  {sub}
-                </option>
-              ))}
-              <option value="Khác">Khác</option>
-            </select>
-          </div>
+      {/* Thống kê nhanh */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-amber-50 border border-amber-100 rounded-3xl px-4 py-3 text-center">
+          <p className="text-lg font-extrabold text-amber-700 m-0">
+            {materials.length}
+          </p>
+          <p className="text-[11px] font-semibold text-amber-700/70 m-0">
+            Tổng tài liệu
+          </p>
         </div>
+        <div className="bg-sky-50 border border-sky-100 rounded-3xl px-4 py-3 text-center">
+          <p className="text-lg font-extrabold text-sky-700 m-0">
+            {counts.slide}
+          </p>
+          <p className="text-[11px] font-semibold text-sky-700/70 m-0">
+            Slide bài giảng
+          </p>
+        </div>
+        <div className="bg-emerald-50 border border-emerald-100 rounded-3xl px-4 py-3 text-center">
+          <p className="text-lg font-extrabold text-emerald-700 m-0">
+            {counts.homework}
+          </p>
+          <p className="text-[11px] font-semibold text-emerald-700/70 m-0">
+            Bài tập
+          </p>
+        </div>
+      </div>
 
-        {subject === "Khác" && (
-          <div className="field">
-            <input
-              type="text"
-              placeholder="Nhập tên môn học mới..."
-              className="w-full p-3 bg-white border border-amber-500 rounded-xl text-slate-700 text-sm focus:outline-none"
-              value={customSubject}
-              onChange={(e) => setCustomSubject(e.target.value)}
-              required
-            />
-          </div>
-        )}
+      {/* Chuyển tab */}
+      <CategoryPill value={activeTab} onChange={setActiveTab} counts={counts} />
 
-        <div className="field">
+      {/* Tìm kiếm / lọc / sắp xếp */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="relative sm:col-span-2">
           <input
             type="text"
-            placeholder="Tên tài liệu..."
-            className="w-full p-3 bg-white border border-[#E7DFCE] rounded-xl text-slate-700 text-sm focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
+            placeholder="Tìm kiếm tài liệu..."
+            className={searchCls}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-
-        <div className="field">
-          <textarea
-            placeholder="Mô tả ngắn tài liệu..."
-            rows={2}
-            className="w-full p-3 bg-white border border-[#E7DFCE] rounded-xl text-slate-700 text-sm focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition resize-none"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-
-        <div className="field">
-          <input
-            type="url"
-            placeholder="Dán link Google Drive tại đây..."
-            className="w-full p-3 bg-white border border-[#E7DFCE] rounded-xl text-slate-700 text-sm focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition"
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-[#E06D53] hover:bg-[#D05D43] py-3 rounded-xl text-white font-semibold text-sm shadow-sm disabled:opacity-50 transition cursor-pointer"
+        <select
+          className={selectCls}
+          value={gradeFilter}
+          onChange={(e) => setGradeFilter(e.target.value)}
         >
-          {loading ? "Đang gửi..." : "Đăng tài liệu"}
-        </button>
-      </form>
+          <option value="all">Tất cả các lớp</option>
+          {[1, 2, 3, 4, 5].map((g) => (
+            <option key={g} value={g}>
+              Lớp {g}
+            </option>
+          ))}
+        </select>
+        <select
+          className={selectCls}
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+        >
+          <option value="newest">Mới đăng nhất</option>
+          <option value="title-asc">Tên (A → Z)</option>
+          <option value="title-desc">Tên (Z → A)</option>
+          <option value="grade">Theo lớp</option>
+        </select>
+      </div>
 
-      {/* Danh sách quản lý tài liệu */}
-      <div className="border-t border-[#EFE8D8] pt-5 space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900/70 mb-3 flex items-center gap-1.5">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-amber-600"
-          >
-            <path d="M9 11l3 3L22 4" />
-            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-          </svg>
-          Danh sách tài liệu đã đăng:
-        </h4>
-
-          {/* Chuyển tab xem danh sách - dạng pill trượt giống phần Lời nhắn */}
-          <div className="relative grid grid-cols-2 bg-amber-100/60 p-1 rounded-xl border border-amber-200/80 shadow-inner shrink-0 w-full sm:w-auto">
+      {/* Danh sách thẻ */}
+      <p className="sm:hidden text-center text-[11px] text-slate-500 font-medium m-0">
+        ← Vuốt ngang để xem thêm tài liệu →
+      </p>
+      <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 overflow-x-auto sm:overflow-visible snap-x snap-mandatory sm:snap-none pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+        {filtered.length === 0 ? (
+          <p className="text-xs text-slate-400 text-center py-6 w-full shrink-0 sm:col-span-2 lg:col-span-3">
+            Hiện chưa có tài liệu nào phù hợp trong mục này.
+          </p>
+        ) : (
+          filtered.map((item) => (
             <div
-              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm border border-amber-200/50 transition-all duration-300 ease-in-out ${
-                activeTab === "homework" ? "left-1" : "left-[calc(50%+2px)]"
-              }`}
-            />
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("homework");
-                setCurrentIndex(0);
-              }}
-              className={`relative z-10 px-4 py-2.5 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-2 ${
-                activeTab === "homework"
-                  ? "text-emerald-700"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
+              key={item.id}
+              className="w-full min-w-full shrink-0 snap-center snap-always sm:w-auto sm:min-w-0 sm:shrink bg-white p-6 rounded-3xl border border-sky-100 shadow-lg shadow-sky-900/5 space-y-4 flex flex-col justify-between transition-all hover:shadow-xl"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0"
-              >
-                <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-              </svg>
-              <span>Bài tập</span>
-              <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none ${
-                  activeTab === "homework"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-slate-200/80 text-slate-600"
-                }`}
-              >
-                {
-                  materials.filter(
-                    (i) => (i.category || "homework") === "homework",
-                  ).length
-                }
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("slide");
-                setCurrentIndex(0);
-              }}
-              className={`relative z-10 px-4 py-2.5 text-xs font-bold transition-colors duration-200 flex items-center justify-center gap-2 ${
-                activeTab === "slide"
-                  ? "text-emerald-700"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0"
-              >
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-              <span>Slide bài giảng</span>
-              <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none ${
-                  activeTab === "slide"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-slate-200/80 text-slate-600"
-                }`}
-              >
-                {materials.filter((i) => i.category === "slide").length}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <div
-          className={`space-y-3 transition-opacity duration-200 ${isAnimating ? "opacity-0" : "opacity-100"}`}
-        >
-          {filteredMaterials.length === 0 ? (
-            <div className="text-xs text-slate-400 text-center py-4">
-              Hiện chưa có tài liệu nào trong mục này.
-            </div>
-          ) : (
-            visibleMaterials.map((item) => (
-              <div
-                key={item.id}
-                className="p-3.5 bg-white border border-[#E7DFCE] rounded-xl flex justify-between items-center gap-4 shadow-2xs"
-              >
-                <div className="overflow-hidden space-y-1">
-                  <div className="flex gap-1.5">
-                    <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 rounded-md">
-                      {item.subject}
-                    </span>
-                    <span className="inline-block px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800 rounded-md">
-                      Lớp {item.grade || "3"}
-                    </span>
-                  </div>
-                  <h5 className="font-bold text-slate-800 text-sm truncate">
-                    {item.title}
-                  </h5>
+              <div className="flex flex-col items-center text-center space-y-2">
+                <div className="w-16 h-16 rounded-full bg-linear-to-tr from-sky-400 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20">
+                  {item.category === "slide" ? (
+                    <SlideIcon size={26} />
+                  ) : (
+                    <BookIcon size={26} />
+                  )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(item)}
-                    className="px-3.5 py-2 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 shadow-2xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z" />
-                    </svg>
-                    Sửa
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(item.id)}
-                    className="text-red-700 hover:text-white bg-rose-50 hover:bg-red-600 text-xs px-3.5 py-2 border border-red-200 rounded-xl transition-all font-semibold shadow-2xs"
-                  >
-                    Xóa
-                  </button>
+                <h4 className="font-extrabold text-slate-800 text-base m-0 line-clamp-2 w-full min-w-0 break-all">
+                  {item.title}
+                </h4>
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <span className="px-2.5 py-0.5 bg-amber-50 border border-amber-100 rounded-full text-[11px] font-bold text-amber-700">
+                    {item.subject}
+                  </span>
+                  <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-100 rounded-full text-[11px] font-bold text-emerald-700">
+                    Lớp {item.grade || "3"}
+                  </span>
                 </div>
               </div>
-            ))
-          )}
-        </div>
 
-        {/* Nút phân trang */}
-        {filteredMaterials.length > itemsPerPage && (
-          <div className="flex justify-center gap-2 mt-4">
-            <button
-              type="button"
-              onClick={() =>
-                handlePageChange(Math.max(currentIndex - itemsPerPage, 0))
-              }
-              disabled={currentIndex === 0 || isAnimating}
-              className="w-9 h-9 rounded-full border border-[#E7DFCE] bg-white hover:bg-slate-50 disabled:opacity-30 flex items-center justify-center text-slate-600 transition-all cursor-pointer shadow-2xs"
-            >
-              ❮
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePageChange(currentIndex + itemsPerPage)}
-              disabled={
-                currentIndex + itemsPerPage >= filteredMaterials.length ||
-                isAnimating
-              }
-              className="w-9 h-9 rounded-full border border-[#E7DFCE] bg-white hover:bg-slate-50 disabled:opacity-30 flex items-center justify-center text-slate-600 transition-all cursor-pointer shadow-2xs"
-            >
-              ❯
-            </button>
-          </div>
+              <div className="bg-amber-50/40 p-3.5 rounded-3xl border border-amber-100/60 space-y-2 text-xs">
+                <p className="text-slate-600 m-0 line-clamp-2 min-h-8">
+                  {item.description || "Chưa có mô tả."}
+                </p>
+                <div className="flex justify-between items-center gap-3 pt-1 border-t border-slate-100/60">
+                  <span className="text-slate-500 font-medium">Liên kết</span>
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold text-sky-600 hover:underline truncate"
+                  >
+                    Mở tài liệu
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                <button
+                  onClick={() => handleOpenEdit(item)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-500 hover:text-amber-600 border border-slate-100 transition-all cursor-pointer"
+                  title="Sửa"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setConfirmDeleteItem(item)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-100 transition-all cursor-pointer"
+                  title="Xóa"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))
         )}
       </div>
 
-      {/* MODAL CHỈNH SỬA TÀI LIỆU */}
-      {editItem && (
+      {/* POPUP THÊM TÀI LIỆU */}
+      {addModalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
-          <div className="bg-[#FAF6EE] p-6 rounded-3xl w-full max-w-md border border-[#EFE8D8] shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-bold text-slate-800 mb-2 flex items-center gap-2">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-amber-600"
-              >
-                <path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5z" />
-              </svg>
-              Chỉnh sửa tài liệu
-            </h3>
-
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">
-                Phân loại tab
-              </label>
-              <select
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
-                value={editItem.category || "homework"}
-                onChange={(e) =>
-                  setEditItem({
-                    ...editItem,
-                    category: e.target.value as "homework" | "slide",
-                  })
-                }
-              >
-                <option value="homework">Bài tập</option>
-                <option value="slide">Slide bài giảng</option>
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">
-                  Khối lớp
-                </label>
-                <select
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
-                  value={editItem.grade || "3"}
-                  onChange={(e) =>
-                    setEditItem({ ...editItem, grade: e.target.value })
-                  }
-                >
-                  {[1, 2, 3, 4, 5].map((g) => (
-                    <option key={g} value={g}>
-                      Lớp {g}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">
-                  Môn học
-                </label>
-                <select
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
-                  value={editItem.subject}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "Khác") {
-                      setIsEditCustom(true);
-                      setEditItem({ ...editItem, subject: "Khác" });
-                    } else {
-                      setIsEditCustom(false);
-                      setEditItem({ ...editItem, subject: val });
-                    }
-                  }}
-                >
-                  {defaultSubjects.map((sub) => (
-                    <option key={sub} value={sub}>
-                      {sub}
-                    </option>
-                  ))}
-                  <option value="Khác">Khác</option>
-                </select>
-              </div>
-            </div>
-
-            {isEditCustom && (
-              <div>
-                <label className="text-xs text-slate-500 mb-1 block">
-                  Nhập tên môn học tùy chỉnh
-                </label>
-                <input
-                  className="w-full px-3.5 py-2.5 bg-white border border-amber-500 rounded-xl text-slate-800 text-xs font-medium focus:outline-none"
-                  value={editCustomSubject}
-                  onChange={(e) => setEditCustomSubject(e.target.value)}
-                  placeholder="Nhập tên môn..."
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">
-                Tên tài liệu
-              </label>
-              <input
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
-                value={editItem.title}
-                onChange={(e) =>
-                  setEditItem({ ...editItem, title: e.target.value })
-                }
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">
-                Mô tả ngắn
-              </label>
-              <textarea
-                rows={2}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none resize-none"
-                value={editItem.description || ""}
-                onChange={(e) =>
-                  setEditItem({ ...editItem, description: e.target.value })
-                }
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-500 mb-1 block">
-                Link Google Drive
-              </label>
-              <input
-                className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
-                value={editItem.link}
-                onChange={(e) =>
-                  setEditItem({ ...editItem, link: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="flex gap-2.5 pt-2">
+          <div className="bg-white p-6 rounded-3xl w-full max-w-md border border-[#EFE8D8] shadow-xl space-y-4 max-h-[90vh] overflow-y-auto scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-800 m-0">
+                Đăng tài liệu mới
+              </h3>
               <button
                 type="button"
-                onClick={handleUpdate}
-                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition"
+                onClick={() => setAddModalOpen(false)}
+                className={closeBtnCls}
               >
-                Lưu thay đổi
+                ✕
               </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className={labelCls}>Phân loại</label>
+                <CategoryPill value={category} onChange={setCategory} />
+              </div>
+
+              <div>
+                <label className={labelCls}>Tên tài liệu *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Tên tài liệu..."
+                  className={inputCls}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelCls}>Khối lớp</label>
+                  <select
+                    className={inputCls}
+                    value={grade}
+                    onChange={(e) => setGrade(e.target.value)}
+                  >
+                    {[1, 2, 3, 4, 5].map((g) => (
+                      <option key={g} value={g}>
+                        Lớp {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Môn học</label>
+                  <select
+                    className={inputCls}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  >
+                    {DEFAULT_SUBJECTS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="Khác">Khác</option>
+                  </select>
+                </div>
+              </div>
+
+              {subject === "Khác" && (
+                <div>
+                  <label className={labelCls}>Nhập tên môn học tùy chỉnh</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nhập tên môn học mới..."
+                    className={inputCustomCls}
+                    value={customSubject}
+                    onChange={(e) => setCustomSubject(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className={labelCls}>Mô tả ngắn</label>
+                <textarea
+                  rows={2}
+                  placeholder="Mô tả ngắn tài liệu..."
+                  className={`${inputCls} resize-none`}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Link Google Drive *</label>
+                <input
+                  type="url"
+                  required
+                  placeholder="Dán link Google Drive tại đây..."
+                  className={inputCls}
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                />
+              </div>
+
+              <div className="flex items-center gap-2.5 justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setAddModalOpen(false)}
+                  className={btnGray}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`${btnAmber} disabled:opacity-50`}
+                >
+                  {loading ? "Đang gửi..." : "Đăng tài liệu"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÓA NHANH */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full p-6 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800 m-0">
+                Xóa tài liệu
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDeleteModalOpen(false)}
+                className={closeBtnCls}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 my-3">
+              <input
+                type="text"
+                placeholder="Tìm kiếm tài liệu theo tên..."
+                value={deleteSearch}
+                onChange={(e) => setDeleteSearch(e.target.value)}
+                className="flex-1 px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-rose-300 transition-all"
+              />
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className={btnGray}
+              >
+                {allDeleteSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 my-1 max-h-87.5">
+              {deleteList.length === 0 ? (
+                <p className="text-center text-slate-400 py-6 text-sm">
+                  Không có tài liệu nào.
+                </p>
+              ) : (
+                deleteList.map((m) => {
+                  const isSelected = selectedIds.includes(m.id);
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() =>
+                        setSelectedIds(
+                          isSelected
+                            ? selectedIds.filter((id) => id !== m.id)
+                            : [...selectedIds, m.id],
+                        )
+                      }
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                        isSelected
+                          ? "bg-rose-50/60 border-rose-200 text-rose-900"
+                          : "bg-white border-slate-100 hover:bg-slate-50 text-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
+                        />
+                        <div className="overflow-hidden">
+                          <p className="font-bold text-sm truncate">
+                            {m.title}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            Lớp {m.grade || "3"} - {m.subject}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 font-medium text-slate-600 shrink-0">
+                        {m.category === "slide" ? "Slide" : "Bài tập"}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
+              <span className="text-xs font-semibold text-slate-500">
+                Đã chọn:{" "}
+                <strong className="text-rose-600">{selectedIds.length}</strong>{" "}
+                tài liệu
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteModalOpen(false)}
+                  className={btnGray}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRequestBatchDelete}
+                  disabled={selectedIds.length === 0}
+                  className={`px-4 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-md ${
+                    selectedIds.length > 0
+                      ? "bg-rose-500 hover:bg-rose-600 shadow-rose-500/20"
+                      : "bg-slate-300 cursor-not-allowed shadow-none"
+                  }`}
+                >
+                  Xóa các mục đã chọn ({selectedIds.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP CHỈNH SỬA */}
+      {editItem && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
+          <div className="bg-white p-6 rounded-3xl w-full max-w-md border border-[#EFE8D8] shadow-xl space-y-4 max-h-[90vh] overflow-y-auto scrollbar-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-800 m-0">
+                Chỉnh sửa tài liệu
+              </h3>
               <button
                 type="button"
                 onClick={() => setEditItem(null)}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                className={closeBtnCls}
               >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className={labelCls}>Phân loại</label>
+                <CategoryPill
+                  value={editItem.category || "homework"}
+                  onChange={(c) => setEditItem({ ...editItem, category: c })}
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Tên tài liệu *</label>
+                <input
+                  className={inputCls}
+                  value={editItem.title}
+                  onChange={(e) =>
+                    setEditItem({ ...editItem, title: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelCls}>Khối lớp</label>
+                  <select
+                    className={inputCls}
+                    value={editItem.grade || "3"}
+                    onChange={(e) =>
+                      setEditItem({ ...editItem, grade: e.target.value })
+                    }
+                  >
+                    {[1, 2, 3, 4, 5].map((g) => (
+                      <option key={g} value={g}>
+                        Lớp {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Môn học</label>
+                  <select
+                    className={inputCls}
+                    value={editItem.subject}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setIsEditCustom(val === "Khác");
+                      setEditItem({ ...editItem, subject: val });
+                    }}
+                  >
+                    {DEFAULT_SUBJECTS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value="Khác">Khác</option>
+                  </select>
+                </div>
+              </div>
+
+              {isEditCustom && (
+                <div>
+                  <label className={labelCls}>Nhập tên môn học tùy chỉnh</label>
+                  <input
+                    className={inputCustomCls}
+                    value={editCustomSubject}
+                    onChange={(e) => setEditCustomSubject(e.target.value)}
+                    placeholder="Nhập tên môn..."
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className={labelCls}>Mô tả ngắn</label>
+                <textarea
+                  rows={2}
+                  className={`${inputCls} resize-none`}
+                  value={editItem.description || ""}
+                  onChange={(e) =>
+                    setEditItem({ ...editItem, description: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Link Google Drive *</label>
+                <input
+                  className={inputCls}
+                  value={editItem.link}
+                  onChange={(e) =>
+                    setEditItem({ ...editItem, link: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3">
+              <button onClick={() => setEditItem(null)} className={btnGray}>
                 Hủy bỏ
+              </button>
+              <button
+                onClick={handleUpdate}
+                disabled={loading}
+                className={`${btnAmber} disabled:opacity-50`}
+              >
+                Lưu thay đổi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÁC NHẬN XÓA 1 TÀI LIỆU */}
+      {confirmDeleteItem && (
+        <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-xl">
+              ⚠️
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                Xóa tài liệu?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Bạn có chắc muốn xóa tài liệu{" "}
+                <strong className="text-slate-800">
+                  &quot;{confirmDeleteItem.title}&quot;
+                </strong>{" "}
+                không? Hành động này không thể hoàn tác.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteItem(null)}
+                disabled={deletingId === confirmDeleteItem.id}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deletingId === confirmDeleteItem.id}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all shadow-2xs cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {deletingId === confirmDeleteItem.id ? "Đang xóa..." : "Xóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÁC NHẬN XÓA HÀNG LOẠT (đè lên trên modal Xóa nhanh) */}
+      {confirmBatchDelete && (
+        <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-xl">
+              ⚠️
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                Xóa {selectedIds.length} tài liệu đã chọn?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Toàn bộ{" "}
+                <strong className="text-slate-800">{selectedIds.length}</strong>{" "}
+                tài liệu đã chọn sẽ bị xóa. Hành động này không thể hoàn tác.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmBatchDelete(false)}
+                disabled={batchDeleting}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBatchDelete}
+                disabled={batchDeleting}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all shadow-2xs cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {batchDeleting
+                  ? "Đang xóa..."
+                  : `Xóa ${selectedIds.length} tài liệu`}
               </button>
             </div>
           </div>
