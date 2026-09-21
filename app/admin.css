@@ -500,3 +500,25 @@
      padding: 2px 7px;
    }
  }
+
+ /* ---------- DARK MODE ---------- */
+ .dark .upload-zone:hover {
+   background: #1e293b;
+ }
+
+ .dark .li-tag {
+   background: #14352a;
+   color: #86efac;
+ }
+
+ .dark .li-remove:hover {
+   background: #3b1a12;
+ }
+
+ .dark .tt-day h4 {
+   color: var(--ink);
+ }
+
+ .dark .badge-count {
+   color: #3d2a0a;
+ }

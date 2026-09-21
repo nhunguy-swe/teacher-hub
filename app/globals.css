@@ -156,11 +156,6 @@ img {
   transition: transform .18s ease, box-shadow .18s ease;
 }
 
-/* .card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 22px rgba(44, 74, 61, .12);
-} */
-
 /* ---------- FORM DÙNG CHUNG (nền sáng) ---------- */
 input[type=text],
 input[type=url],
@@ -232,7 +227,7 @@ textarea {
   color: var(--ink);
 }
 
-/* ---------- THẺ MÔN HỌC / MỨC ĐỘ (dùng ở lịch dạy, trò chơi, học liệu) ---------- */
+/* ---------- THẺ MÔN HỌC / MỨC ĐỘ ---------- */
 .tag-subject {
   display: inline-block;
   padding: 4px 10px;
@@ -286,7 +281,7 @@ textarea {
   color: #b8462f;
 }
 
-/* ---------- BACK TO TOP (dùng ở trang chính, để sẵn cho trang khác nếu cần) ---------- */
+/* ---------- BACK TO TOP ---------- */
 .back-to-top {
   position: fixed;
   bottom: 26px;
@@ -311,7 +306,7 @@ textarea {
 }
 
 /* ---------- RESPONSIVE DÙNG CHUNG ---------- */
-@media (max-width:860px) {
+@media (max-width: 860px) {
   .grid-3 {
     grid-template-columns: 1fr !important;
   }
@@ -319,4 +314,266 @@ textarea {
   .grid-2 {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* ================= DARK MODE ================= */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.dark {
+  color-scheme: dark;
+
+  /* Biến riêng của dự án */
+  --paper: #0b1220;
+  --paper-line: #334155;
+  --chalk: #1e293b;
+  --ink: #e2e8f0;
+  --ink-soft: #94a3b8;
+
+  /* Slate */
+  --color-slate-50: #1e293b;
+  --color-slate-100: #243044;
+  --color-slate-200: #334155;
+  --color-slate-300: #475569;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #cbd5e1;
+  --color-slate-700: #e2e8f0;
+  --color-slate-800: #f1f5f9;
+  --color-slate-900: #f1f5f9;
+
+  /* Amber */
+  --color-amber-50: #2b1d08;
+  --color-amber-100: #3d2a0a;
+  --color-amber-200: #78350f;
+  --color-amber-300: #92400e;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+
+  /* Rose */
+  --color-rose-50: #2f0d18;
+  --color-rose-100: #4c0519;
+  --color-rose-200: #881337;
+  --color-rose-300: #be123c;
+  --color-rose-700: #fda4af;
+
+  /* Emerald */
+  --color-emerald-50: #052e22;
+  --color-emerald-100: #064e3b;
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-700: #6ee7b7;
+
+  /* Sky */
+  --color-sky-50: #0c2433;
+  --color-sky-100: #0f3046;
+  --color-sky-200: #075985;
+  --color-sky-300: #0369a1;
+  --color-sky-700: #7dd3fc;
+
+  /* Blue */
+  --color-blue-50: #0f1f3d;
+  --color-blue-100: #172554;
+  --color-blue-200: #1e40af;
+  --color-blue-300: #1d4ed8;
+  --color-blue-700: #93c5fd;
+
+  /* Violet */
+  --color-violet-50: #22163f;
+  --color-violet-100: #2e1d5a;
+  --color-violet-200: #5b21b6;
+  --color-violet-300: #6d28d9;
+  --color-violet-700: #c4b5fd;
+
+  /* Purple */
+  --color-purple-50: #2a1238;
+  --color-purple-100: #3b1a52;
+  --color-purple-200: #6b21a8;
+  --color-purple-300: #7e22ce;
+  --color-purple-700: #d8b4fe;
+
+  /* Orange */
+  --color-orange-50: #33190a;
+  --color-orange-100: #46200c;
+  --color-orange-200: #9a3412;
+  --color-orange-300: #c2410c;
+  --color-orange-700: #fdba74;
+
+  /* Fuchsia */
+  --color-fuchsia-50: #2e1233;
+  --color-fuchsia-100: #421a49;
+  --color-fuchsia-200: #86198f;
+  --color-fuchsia-300: #a21caf;
+  --color-fuchsia-700: #f0abfc;
+
+  /* Chữ toast: đảo mức 800 sang sáng */
+  --color-emerald-800: #a7f3d0;
+  --color-sky-800: #bae6fd;
+  --color-rose-800: #fecdd3;
+}
+
+/* Không đảo --color-white vì text-white trên nút màu vẫn phải trắng */
+.dark .bg-white {
+  background-color: #0f172a !important;
+}
+
+.dark [class*="bg-white/"] {
+  background-color: rgb(30 41 59 / 0.6) !important;
+}
+
+/* Chữ nhãn có độ trong suốt cần sáng hơn trên nền tối */
+.dark [class*="text-orange-700/"],
+.dark [class*="text-emerald-700/"],
+.dark [class*="text-sky-700/"],
+.dark [class*="text-rose-700/"],
+.dark [class*="text-violet-700/"] {
+  opacity: 0.85;
+}
+
+/* Các chỗ dùng var(--chalk) làm CHỮ trên nền màu: ghim lại chữ sáng */
+.dark .btn-primary,
+.dark .btn-danger,
+.dark .btn-ghost,
+.dark .nav-cta,
+.dark .back-to-top,
+.dark .topbar {
+  color: #f5f1e8;
+}
+
+/* Thẻ môn học */
+.dark .tag-toan,
+.dark .tag-de {
+  background: #14352a;
+  color: #86efac;
+}
+
+.dark .tag-van,
+.dark .tag-nc {
+  background: #3b1a12;
+  color: #fdba9a;
+}
+
+.dark .tag-anh {
+  background: #0f2c3a;
+  color: #93c5fd;
+}
+
+.dark .tag-tn,
+.dark .tag-tb {
+  background: #3a2c0a;
+  color: #fcd34d;
+}
+
+.dark .tag-td {
+  background: #1a3318;
+  color: #bef264;
+}
+
+.dark .tag-nt {
+  background: #2a1638;
+  color: #d8b4fe;
+}
+
+/* Hover ô lối tắt / thẻ nhỏ */
+.dark [class*="hover:bg-sky-50"]:hover,
+.dark [class*="hover:bg-blue-50"]:hover,
+.dark [class*="hover:bg-violet-50"]:hover,
+.dark [class*="hover:bg-purple-50"]:hover,
+.dark [class*="hover:bg-fuchsia-50"]:hover,
+.dark [class*="hover:bg-amber-50"]:hover,
+.dark [class*="hover:bg-emerald-50"]:hover,
+.dark [class*="hover:bg-orange-50"]:hover,
+.dark [class*="hover:bg-rose-50"]:hover {
+  background-color: rgb(51 65 85 / 0.55);
+}
+
+.dark [class*="hover:border-sky-300"]:hover,
+.dark [class*="hover:border-blue-300"]:hover,
+.dark [class*="hover:border-violet-300"]:hover,
+.dark [class*="hover:border-fuchsia-300"]:hover,
+.dark [class*="hover:border-amber-300"]:hover,
+.dark [class*="hover:border-emerald-300"]:hover,
+.dark [class*="hover:border-orange-300"]:hover,
+.dark [class*="hover:border-rose-300"]:hover {
+  border-color: #f59e0b;
+}
+
+/* Khung trạng thái rỗng (viền đứt): đặt màu trên chính khung, con kế thừa */
+.dark [class*="border-dashed"] {
+  background-color: rgb(30 41 59 / 0.5) !important;
+  border-color: #475569 !important;
+  color: #94a3b8;
+}
+
+.dark [class*="border-dashed"] svg[class*="text-emerald"] {
+  color: #6ee7b7;
+}
+
+/* ===== Sơ đồ lớp: bảng màu riêng cho vùng in ===== */
+#printable-area {
+  --sc-bg: #ffffff;
+  --sc-panel: #f8fafc;
+  --sc-panel-border: #e2e8f0;
+  --sc-group-bg: #fffbeb;
+  --sc-group-border: #fde68a;
+  --sc-group-line: #fef3c7;
+  --sc-desk-bg: #ffffff;
+  --sc-seat-bg: #ecfdf5;
+  --sc-seat-border: #a7f3d0;
+  --sc-empty-bg: #f8fafc;
+  --sc-empty-border: #cbd5e1;
+  --sc-empty-text: #94a3b8;
+  --sc-name: #1e293b;
+  --sc-title: #0f172a;
+  --sc-sub: #475569;
+  --sc-group-title: #92400e;
+  --sc-board-bg: #f1f5f9;
+  --sc-board-text: #334155;
+}
+
+.dark #printable-area:not(.print-light) {
+  --sc-bg: #0f172a;
+  --sc-panel: #111c30;
+  --sc-panel-border: #334155;
+  --sc-group-bg: #2b1d08;
+  --sc-group-border: #78350f;
+  --sc-group-line: #78350f;
+  --sc-desk-bg: #1e293b;
+  --sc-seat-bg: #052e22;
+  --sc-seat-border: #065f46;
+  --sc-empty-bg: #162033;
+  --sc-empty-border: #475569;
+  --sc-empty-text: #94a3b8;
+  --sc-name: #f1f5f9;
+  --sc-title: #f8fafc;
+  --sc-sub: #94a3b8;
+  --sc-group-title: #fcd34d;
+  --sc-board-bg: #1e293b;
+  --sc-board-text: #e2e8f0;
+}
+
+/* Ô nhập trong vùng in: nền trong suốt, màu lấy từ style inline */
+#printable-area input[type="text"] {
+  background: transparent !important;
+  border-color: inherit;
+  padding: 2px;
+}
+
+.dark [style*="background: rgb(239, 246, 255)"] {
+  background: #172554 !important;
+  color: #93c5fd !important;
+}
+
+.dark [style*="background: rgb(236, 253, 245)"] {
+  background: #052e22 !important;
+  color: #6ee7b7 !important;
+}
+
+.dark [style*="background: rgb(255, 251, 235)"] {
+  background: #2b1d08 !important;
+  color: #fcd34d !important;
+}
+
+.dark [role="alert"] {
+  border-color: rgb(148 163 184 / 0.35);
 }

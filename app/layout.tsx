@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro, Baloo_2, Mali } from "next/font/google";
+import RegisterServiceWorker from "./RegisterServiceWorker";
 import "./globals.css";
 
 const beVietnamPro = Be_Vietnam_Pro({
@@ -27,7 +28,26 @@ const mali = Mali({
 export const metadata: Metadata = {
   title: "Lớp học cô Trúc",
   description: "Website thông tin lớp học",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Teacher Hub",
+  },
 };
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+};
+
+// Chạy trước khi trang hiện ra: đọc theme đã lưu và gắn class "dark" lên <html>
+const themeInitScript = `
+try {
+  var t = localStorage.getItem("theme") || "system";
+  var d = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", d);
+} catch (e) {}
+`;
 
 export default function RootLayout({
   children,
@@ -37,9 +57,17 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
+      suppressHydrationWarning
+      data-scroll-behavior="smooth"
       className={`${beVietnamPro.variable} ${baloo2.variable} ${mali.variable}`}
     >
-      <body>{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body>
+        <RegisterServiceWorker />
+        {children}
+      </body>
     </html>
   );
 }

@@ -11,6 +11,7 @@ import Games from "@/components/Games";
 import FAQ from "@/components/FAQ";
 import Contact from "@/components/Contact";
 import Footer from "@/components/Footer";
+import { ToastProvider } from "@/components/ToastProvider";
 import "./home.css";
 
 export default function Home() {
@@ -29,7 +30,7 @@ export default function Home() {
   };
 
   return (
-    <>
+    <ToastProvider>
       {/* Thanh điều hướng */}
       <Navbar />
 
@@ -101,6 +102,6 @@ export default function Home() {
           ↑
         </button>
       )}
-    </>
+    </ToastProvider>
   );
 }
