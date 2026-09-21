@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useToast } from "@/components/ToastProvider"
 import Link from "next/link";
 
 export default function LoginPage() {
+    const toast = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,7 +22,7 @@ export default function LoginPage() {
       router.push("/admin");
     } catch (err: unknown) {
       console.error(err);
-      alert("Sai tài khoản hoặc mật khẩu!");
+      toast.error("Sai tài khoản hoặc mật khẩu!");
     } finally {
       setLoading(false);
     }
