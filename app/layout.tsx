@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro, Baloo_2, Mali } from "next/font/google";
 import RegisterServiceWorker from "./RegisterServiceWorker";
+import PinAdminModal from "@/components/PinAdminModal";
 import "./globals.css";
 
 const beVietnamPro = Be_Vietnam_Pro({
@@ -40,7 +41,6 @@ export const viewport: Viewport = {
   themeColor: "#0f172a",
 };
 
-// Chạy trước khi trang hiện ra: đọc theme đã lưu và gắn class "dark" lên <html>
 const themeInitScript = `
 try {
   var t = localStorage.getItem("theme") || "system";
@@ -66,6 +66,10 @@ export default function RootLayout({
       </head>
       <body>
         <RegisterServiceWorker />
+
+        {/* 2. Đặt component modal PIN ở đây để chạy ngầm trên toàn bộ ứng dụng */}
+        <PinAdminModal />
+
         {children}
       </body>
     </html>

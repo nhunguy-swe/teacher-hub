@@ -28,6 +28,9 @@ export default function Footer() {
         <div className="footer-col" style={{ maxWidth: "500px" }}>
           <div
             className="logo"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("open-admin-pin"))
+            }
             style={{
               display: "flex",
               alignItems: "center",
@@ -36,6 +39,7 @@ export default function Footer() {
               fontSize: "20px",
               color: "#e67e22",
               marginBottom: "12px",
+              cursor: "pointer", // Biến con trỏ thành hình bàn tay khi rê chuột vào
             }}
           >
             <svg
