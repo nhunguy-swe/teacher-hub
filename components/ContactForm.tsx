@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { db } from "@/lib/firebase";
+import { useToast } from "@/components/ToastProvider"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function ContactForm() {
+    const toast = useToast();
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -18,11 +20,11 @@ export default function ContactForm() {
         ...formData,
         createdAt: serverTimestamp(),
       });
-      alert("Đã gửi lời nhắn thành công!");
+      toast.success("Đã gửi lời nhắn thành công!");
       setFormData({ name: "", phone: "", message: "" });
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra, vui lòng thử lại.");
+      toast.warning("Có lỗi xảy ra, vui lòng thử lại.");
     }
   };
 

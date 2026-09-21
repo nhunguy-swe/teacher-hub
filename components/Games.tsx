@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
+import { useToast } from "@/components/ToastProvider"
 import { collection, getDocs, query } from "firebase/firestore";
 
 interface GameItem {
@@ -15,6 +16,7 @@ interface GameItem {
 }
 
 export default function Games() {
+    const toast = useToast(); 
   const [games, setGames] = useState<GameItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("1");
@@ -69,7 +71,7 @@ export default function Games() {
         .catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert("Đã sao chép liên kết trò chơi!");
+       toast.success("Đã sao chép liên kết trò chơi!");
     }
   };
 

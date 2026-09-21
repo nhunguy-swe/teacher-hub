@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
+import { useToast } from "@/components/ToastProvider"
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
 interface MaterialItem {
@@ -16,6 +17,8 @@ interface MaterialItem {
 }
 
 export default function LearningMaterials() {
+    const toast = useToast();
+
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [activeTab, setActiveTab] = useState<"slide" | "baitap">("slide");
   const [loading, setLoading] = useState(true);
@@ -55,7 +58,7 @@ export default function LearningMaterials() {
         .catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert("Đã sao chép liên kết tài liệu vào bộ nhớ tạm!");
+       toast.info("Đã sao chép liên kết tài liệu vào bộ nhớ tạm!");
     }
   };
 
