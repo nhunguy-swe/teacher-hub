@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { useToast } from "@/components/ToastProvider"
+import { useToast } from "@/components/ToastProvider";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 
 interface MaterialItem {
@@ -17,13 +17,26 @@ interface MaterialItem {
 }
 
 export default function LearningMaterials() {
-    const toast = useToast();
+  const toast = useToast();
 
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [activeTab, setActiveTab] = useState<"slide" | "baitap">("slide");
   const [loading, setLoading] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const getSubjectClass = (subject: string = "") => {
+    const s = subject.toLowerCase();
+    if (s.includes("toán")) return "tag-toan";
+    if (s.includes("việt") || s.includes("văn")) return "tag-van";
+    if (s.includes("anh") || s.includes("ngoại ngữ")) return "tag-anh";
+    if (s.includes("tự nhiên") || s.includes("xã hội") || s.includes("tn"))
+      return "tag-tn";
+    if (s.includes("kỹ năng") || s.includes("đạo đức")) return "tag-nt";
+    if (s.includes("thể dục") || s.includes("nhạc") || s.includes("mỹ thuật"))
+      return "tag-td";
+    return "tag-de";
+  };
 
   useEffect(() => {
     const fetchMaterials = async () => {
@@ -58,7 +71,7 @@ export default function LearningMaterials() {
         .catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
-       toast.info("Đã sao chép liên kết tài liệu vào bộ nhớ tạm!");
+      toast.info("Đã sao chép liên kết tài liệu vào bộ nhớ tạm!");
     }
   };
 
@@ -194,7 +207,13 @@ export default function LearningMaterials() {
 
       <div id="hlPanels">
         {loading ? (
-          <p style={{ textAlign: "center", padding: "30px", color: "#666" }}>
+          <p
+            style={{
+              textAlign: "center",
+              padding: "30px",
+              color: "var(--ink-soft)",
+            }}
+          >
             Đang tải tài liệu...
           </p>
         ) : filteredMaterials.length === 0 ? (
@@ -202,8 +221,8 @@ export default function LearningMaterials() {
             style={{
               textAlign: "center",
               padding: "30px",
-              color: "#666",
-              border: "2px dashed #e2e8f0",
+              color: "var(--ink-soft)",
+              border: "2px dashed var(--paper-line)",
               borderRadius: "12px",
             }}
           >
@@ -214,7 +233,6 @@ export default function LearningMaterials() {
             <div ref={scrollRef} className="materials-scroll">
               {filteredMaterials.map((item, index) => {
                 const iconClass = `ic-${(index % 3) + 1}`;
-                const customSubjectStyle = getSubjectStyle(item.subject);
 
                 return (
                   <div
@@ -260,9 +278,8 @@ export default function LearningMaterials() {
 
                     <div className="card-meta">
                       <span
-                        className="tag-subject"
+                        className={`tag-subject ${getSubjectClass(item.subject)}`}
                         style={{
-                          ...customSubjectStyle,
                           padding: "2px 8px",
                           borderRadius: "4px",
                           fontSize: "12px",

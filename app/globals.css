@@ -281,6 +281,10 @@ textarea {
   color: #b8462f;
 }
 
+.tag-subject {
+  border: 1px solid transparent;
+}
+
 /* ---------- BACK TO TOP ---------- */
 .back-to-top {
   position: fixed;
@@ -576,4 +580,86 @@ textarea {
 
 .dark [role="alert"] {
   border-color: rgb(148 163 184 / 0.35);
+}
+
+/* Navbar ở dark mode */
+.dark nav {
+  background: rgba(33, 58, 48, .92); /* --blackboard-dark */
+}
+
+/* Hero luôn là bảng đen: ghim chữ sáng, không theo biến --chalk của dark mode */
+.hero,
+.dark .hero {
+  color: #f5f1e8;
+}
+
+.hero h1 {
+  color: #f5f1e8;
+}
+
+.hero h1 span {
+  color: var(--yellow);
+}
+
+/* Vùng nền bảng đen: luôn dùng chữ sáng, không theo --chalk của dark mode */
+.contact,
+.quick-connect a,
+.footer-col h6,
+.tab-btn.active,
+thead th,
+form button,
+.testi:nth-child(3) {
+  color: #f5f1e8;
+}
+
+.quick-connect a:hover {
+  color: var(--yellow);
+}
+
+/* Hàng chẵn bảng thời khóa biểu ở dark mode */
+.dark tbody tr:nth-child(even),
+.dark .timetable-wrap table tbody tr:nth-child(even) td:first-child {
+  background: #243044;
+}
+
+/* Header bảng: nền bảng đen, luôn chữ sáng */
+.dark thead th {
+  color: #f5f1e8;
+}
+
+/* Nhãn Buổi sáng / Buổi chiều */
+.dark .timetable-label {
+  color: #86efac;
+}
+
+.dark .contact,
+.dark .quick-connect a,
+.dark .footer-col h6,
+.dark .tab-btn.active,
+.dark form button,
+.dark .testi:nth-child(3) {
+  color: #f5f1e8;
+}
+
+.dark .quick-connect a:hover {
+  color: var(--yellow);
+}
+
+.dark body {
+  background: #0f172a; /* hoặc màu bạn muốn */
+}
+
+.dark .tear {
+  background: #0f172a; /* cùng màu với body */
+}
+
+.dark .announce {
+  border: 1px solid var(--paper-line);
+  border-left-width: 5px;
+}
+
+.dark .materials-nav-btn {
+  background: var(--chalk);
+  border-color: var(--paper-line);
+  color: var(--ink);
 }

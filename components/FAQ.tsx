@@ -53,7 +53,10 @@ export default function FAQ() {
         {faqs.map((item, index) => (
           <div
             key={index}
-            style={{ borderBottom: "1px solid #e0dcd5", padding: "16px 0" }}
+            style={{
+              borderBottom: "1px solid var(--paper-line)",
+              padding: "16px 0",
+            }}
           >
             <button
               onClick={() => setOpenIndex(openIndex === index ? null : index)}
@@ -67,7 +70,7 @@ export default function FAQ() {
                 cursor: "pointer",
                 textAlign: "left",
                 fontWeight: 600,
-                color: "#333",
+                color: "var(--ink)",
                 fontSize: "16px",
                 padding: "0",
               }}
@@ -93,7 +96,7 @@ export default function FAQ() {
                 overflow: "hidden",
                 transition: "all 0.3s ease",
                 fontSize: "14px",
-                color: "#666",
+                color: "var(--ink-soft)",
                 lineHeight: "1.6",
                 marginTop: openIndex === index ? "12px" : "0",
               }}

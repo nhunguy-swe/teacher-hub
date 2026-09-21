@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { useToast } from "@/components/ToastProvider"
+import { useToast } from "@/components/ToastProvider";
 import { collection, getDocs, query } from "firebase/firestore";
 
 interface GameItem {
@@ -16,7 +16,7 @@ interface GameItem {
 }
 
 export default function Games() {
-    const toast = useToast(); 
+  const toast = useToast();
   const [games, setGames] = useState<GameItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("1");
@@ -71,7 +71,7 @@ export default function Games() {
         .catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
-       toast.success("Đã sao chép liên kết trò chơi!");
+      toast.success("Đã sao chép liên kết trò chơi!");
     }
   };
 
@@ -163,7 +163,7 @@ export default function Games() {
         {loading ? (
           <div
             className="text-center py-12"
-            style={{ color: "#666", fontSize: "14px" }}
+            style={{ color: "var(--ink-soft)", fontSize: "14px" }}
           >
             Đang tải danh sách trò chơi...
           </div>
@@ -217,8 +217,8 @@ export default function Games() {
                         width: "36px",
                         height: "36px",
                         borderRadius: "50%",
-                        border: "1px solid #ddd",
-                        background: "#fff",
+                        border: "1px solid var(--paper-line)",
+                        background: "var(--chalk)",
                         cursor: activeIndex === 0 ? "not-allowed" : "pointer",
                         display: "flex",
                         alignItems: "center",
@@ -247,8 +247,8 @@ export default function Games() {
                         width: "36px",
                         height: "36px",
                         borderRadius: "50%",
-                        border: "1px solid #ddd",
-                        background: "#fff",
+                        border: "1px solid var(--paper-line)",
+                        background: "var(--chalk)",
                         cursor:
                           activeIndex >= maxIndex ? "not-allowed" : "pointer",
                         display: "flex",
@@ -278,8 +278,8 @@ export default function Games() {
                     style={{
                       textAlign: "center",
                       padding: "30px",
-                      color: "#666",
-                      border: "2px dashed #e2e8f0",
+                      color: "var(--ink-soft)",
+                      border: "2px dashed var(--paper-line)",
                       borderRadius: "12px",
                     }}
                   >

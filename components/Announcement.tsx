@@ -80,7 +80,13 @@ export default function Announcement() {
         className={`announce-list transition-opacity duration-200 ${isAnimating ? "opacity-0" : "opacity-100"}`}
       >
         {loading ? (
-          <p style={{ textAlign: "center", padding: "20px", color: "#666" }}>
+          <p
+            style={{
+              textAlign: "center",
+              padding: "20px",
+              color: "var(--ink-soft)",
+            }}
+          >
             Đang tải thông báo...
           </p>
         ) : announcements.length === 0 ? (
@@ -88,8 +94,8 @@ export default function Announcement() {
             style={{
               textAlign: "center",
               padding: "30px",
-              color: "#666",
-              border: "2px dashed #e2e8f0",
+              color: "var(--ink-soft)",
+              border: "2px dashed var(--paper-line)",
               borderRadius: "12px",
             }}
           >

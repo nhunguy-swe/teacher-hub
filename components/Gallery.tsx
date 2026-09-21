@@ -82,7 +82,7 @@ export default function Gallery() {
       {loading ? (
         <div
           className="text-center py-12"
-          style={{ color: "#666", fontSize: "14px" }}
+          style={{ color: "var(--ink)", fontSize: "14px" }}
         >
           Đang tải thư viện ảnh...
         </div>
@@ -90,7 +90,7 @@ export default function Gallery() {
         <div
           className="text-center py-12"
           style={{
-            color: "#666",
+            color: "var(--ink)",
             fontSize: "14px",
             border: "1px dashed #ddd",
             borderRadius: "12px",
@@ -118,8 +118,8 @@ export default function Gallery() {
                   width: "36px",
                   height: "36px",
                   borderRadius: "50%",
-                  border: "1px solid #ddd",
-                  background: "#fff",
+                  border: "1px solid var(--paper-line)",
+                  background: "var(--chalk)",
                   cursor: activeIndex === 0 ? "not-allowed" : "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -148,8 +148,8 @@ export default function Gallery() {
                   width: "36px",
                   height: "36px",
                   borderRadius: "50%",
-                  border: "1px solid #ddd",
-                  background: "#fff",
+                  border: "1px solid var(--paper-line)",
+                  background: "var(--chalk)",
                   cursor: activeIndex >= maxIndex ? "not-allowed" : "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -221,7 +221,7 @@ export default function Gallery() {
                       fontWeight: 600,
                       margin: "0",
                       textAlign: "center",
-                      color: "#333",
+                      color: "var(--ink)",
                     }}
                   >
                     {item.title || "Khoảnh khắc lớp học"}
@@ -250,7 +250,7 @@ export default function Gallery() {
         >
           <div
             style={{
-              background: "#fff",
+              background: "var(--chalk)",
               borderRadius: "16px",
               padding: "20px",
               maxWidth: "800px",
