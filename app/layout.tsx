@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro, Baloo_2, Mali } from "next/font/google";
 import RegisterServiceWorker from "./RegisterServiceWorker";
+import StandaloneRedirect from "./StandaloneRedirect";
 import PinAdminModal from "@/components/PinAdminModal";
 import "./globals.css";
 
@@ -66,6 +67,7 @@ export default function RootLayout({
       </head>
       <body>
         <RegisterServiceWorker />
+        <StandaloneRedirect />
 
         {/* 2. Đặt component modal PIN ở đây để chạy ngầm trên toàn bộ ứng dụng */}
         <PinAdminModal />
