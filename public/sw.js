@@ -1,6 +1,19 @@
-const CACHE_NAME = "teacher-hub-v1";
+const CACHE_NAME = "teacher-hub-v2"; // 👈 tăng version để force update cache cũ
 
-self.addEventListener("install", () => {
+// Các trang/asset cốt lõi cần có sẵn để app mở được khi offline
+const PRECACHE_URLS = [
+  "/",
+  "/admin/login",
+  "/admin/statistics",
+  "/offline.html",
+  "/icons/icon-192x192.png",
+  "/icons/icon-512x512.png",
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+  );
   self.skipWaiting();
 });
 
@@ -17,17 +30,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Network-first: luôn ưu tiên lấy dữ liệu mới nhất, chỉ dùng cache khi mất mạng
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-
-  // Bỏ qua request từ extension trình duyệt (chrome-extension://, moz-extension://...)
   if (!event.request.url.startsWith("http")) return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Chỉ cache response hợp lệ (bỏ qua opaque/error response)
         if (response && response.status === 200 && response.type === "basic") {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -40,7 +49,12 @@ self.addEventListener("fetch", (event) => {
         const cached = await caches.match(event.request);
         if (cached) return cached;
 
-        // Không có mạng và cũng không có cache -> trả về Response hợp lệ thay vì undefined
+        // Nếu là điều hướng trang (không phải ảnh/JS/CSS) -> trả về trang offline đẹp
+        if (event.request.mode === "navigate") {
+          const offlinePage = await caches.match("/offline.html");
+          if (offlinePage) return offlinePage;
+        }
+
         return new Response("Offline và chưa có dữ liệu cache cho request này.", {
           status: 503,
           statusText: "Service Unavailable",
