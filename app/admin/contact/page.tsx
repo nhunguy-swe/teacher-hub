@@ -43,13 +43,11 @@ export default function ContactPage() {
   };
 
   const handleDelete = async (colName: string, id: string) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa mục này?")) {
-      try {
-        await deleteDoc(doc(db, colName, id));
-        loadMessages();
-      } catch {
-        toast.error("Xóa thất bại!");
-      }
+    try {
+      await deleteDoc(doc(db, colName, id));
+      loadMessages();
+    } catch {
+      toast.error("Xóa thất bại!");
     }
   };
 
