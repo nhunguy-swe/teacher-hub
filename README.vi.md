@@ -6,7 +6,7 @@
 
 Dự án được xây dựng bằng **Next.js**, **React**, **TypeScript**, **Tailwind CSS**, và **Firebase**, gồm một trang web công khai dành cho phụ huynh/học sinh và một khu quản trị đầy đủ chức năng cho giáo viên, với giao diện hiện đại, responsive trên desktop, tablet, mobile, cùng chế độ **dark mode** được hỗ trợ toàn diện.
 
-🔗 **Demo trực tiếp:** [teacher-hub-jet.vercel.app](https://teacher-hub-jet.vercel.app)
+🔗 **Demo trực tiếp:** [teacher-hub-jet.vercel.app](https://lophoccuacotruc.vercel.app/)
 
 ---
 
