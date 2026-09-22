@@ -14,11 +14,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      localStorage.setItem("th_admin_session", "1");
       router.push("/admin");
     } catch (err: unknown) {
       console.error(err);

@@ -619,8 +619,9 @@ export default function AdminLayout({
     setOpenDropdowns((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  const handleLogout = async () => {
+    const handleLogout = async () => {
     await signOut(auth);
+    localStorage.removeItem("th_admin_session");
     router.push("/admin/login");
   };
 

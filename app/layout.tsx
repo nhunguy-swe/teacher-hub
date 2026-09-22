@@ -50,6 +50,17 @@ try {
 } catch (e) {}
 `;
 
+const adminRedirectScript = `
+try {
+  var isAdmin = localStorage.getItem("th_admin_session") === "1";
+  var standalone = window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
+  if (isAdmin && standalone && location.pathname === "/") {
+    location.replace("/admin/statistics");
+  }
+} catch (e) {}
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -64,6 +75,7 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: adminRedirectScript }} />
       </head>
       <body>
         <RegisterServiceWorker />
