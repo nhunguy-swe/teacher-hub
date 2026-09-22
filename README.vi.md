@@ -1,124 +1,102 @@
 # Teacher Hub
-[🇬🇧 ENGLISH](./README.md)
 
-Website hỗ trợ giáo viên quản lý và chia sẻ nội dung giảng dạy, tài liệu học tập và các thông tin dành cho học sinh.
+[🇬🇧 English](./README.md)
 
-Dự án được xây dựng với **Next.js**, **React**, **TypeScript** và **Tailwind CSS**, hướng đến giao diện hiện đại, responsive và dễ sử dụng trên desktop, tablet và mobile.
+**Teacher Hub** là một website giúp giáo viên quản lý và chia sẻ nội dung giảng dạy, theo dõi tiến độ học tập của học sinh, và tổ chức các hoạt động thi đua trong lớp — tất cả trong cùng một nơi.
+
+Dự án được xây dựng bằng **Next.js**, **React**, **TypeScript**, **Tailwind CSS**, và **Firebase**, gồm một trang web công khai dành cho phụ huynh/học sinh và một khu quản trị đầy đủ chức năng cho giáo viên, với giao diện hiện đại, responsive trên desktop, tablet, mobile, cùng chế độ **dark mode** được hỗ trợ toàn diện.
+
+🔗 **Demo trực tiếp:** [teacher-hub-jet.vercel.app](https://teacher-hub-jet.vercel.app)
+
+---
+
+## Mục lục
+
+- [Tính năng](#tính-năng)
+- [Công nghệ sử dụng](#công-nghệ-sử-dụng)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Cài đặt](#cài-đặt)
+- [Biến môi trường](#biến-môi-trường)
+- [Các lệnh có sẵn](#các-lệnh-có-sẵn)
+- [Responsive](#responsive)
+- [Dark Mode](#dark-mode)
+- [Build cho Production](#build-cho-production)
+- [Triển khai (Deployment)](#triển-khai-deployment)
+- [Quy trình Git](#quy-trình-git)
+- [Điều khoản sử dụng](#điều-khoản-sử-dụng)
 
 ---
 
 ## Tính năng
 
-### Trang người dùng
+### Trang chủ (Public Site)
 
-* Trang chủ giới thiệu website.
-* Giới thiệu giáo viên.
-* Hiển thị thông báo.
-* Hiển thị lịch học và lịch hoạt động.
-* Quản lý và hiển thị tài liệu học tập.
-* Thư viện hình ảnh.
-* Trò chơi học tập.
-* FAQ - Câu hỏi thường gặp.
-* Thông tin liên hệ.
-* Footer của website.
-* Giao diện responsive trên desktop, tablet và mobile.
+- **Trang giới thiệu** — phần hero giới thiệu giáo viên chủ nhiệm và lớp học.
+- **Thông báo lớp** — danh sách thông báo có phân trang, cập nhật theo thời gian thực.
+- **Thời khóa biểu** — lịch học buổi sáng/chiều, đồng bộ trực tiếp từ Firestore, hỗ trợ **xuất file Excel chỉ với một cú nhấp** (`.xlsx`, có gộp ô, viền, định dạng sẵn).
+- **Góc học tập** — slide bài giảng và bài tập, lọc theo tab (Slide / Bài tập), có gắn nhãn môn học và nút chia sẻ.
+- **Trò chơi giáo dục** — trò chơi luyện tập theo khối lớp (1–5), lọc theo môn học và mức độ.
+- **Thư viện ảnh** — album ảnh hoạt động lớp học dạng cuộn ngang, kèm chế độ xem phóng to và tải ảnh về máy.
+- **Hỏi đáp (FAQ)** — accordion câu hỏi thường gặp, bấm để mở rộng câu trả lời.
+- **Liên hệ** — thông tin liên hệ và form gửi tin nhắn.
+- **Giao diện responsive** — tối ưu cho desktop, tablet và mobile.
+- **Dark mode** — hỗ trợ đầy đủ chế độ sáng/tối trên toàn bộ các mục.
 
-### Trang Admin
+### Hệ thống thi đua lớp học
 
-Khu vực quản trị dành cho giáo viên hoặc quản trị viên.
+- **Điểm tuần** — mỗi học sinh bắt đầu tuần với điểm nền, được cộng/trừ theo các mục ghi nhận hoạt động trong tuần.
+- **Sao tích lũy** — điểm tích lũy dài hạn cho từng học sinh, hiển thị song song với điểm tuần.
+- **Thi đua tổ** — học sinh được chia theo tổ; xếp hạng tổ tính từ tổng điểm thành viên cộng với điểm thưởng/phạt riêng của tổ, cập nhật theo thời gian thực.
+- **Bảng vàng** — vinh danh các học sinh có điểm tuần cao nhất.
+- **Thẻ đặc quyền & bốc thăm** — giáo viên tạo các "thẻ đặc quyền" làm phần thưởng (áp dụng cho học sinh, tổ, hoặc cả hai); học sinh/tổ được chọn sẽ quay và mở thẻ ngẫu nhiên, kết quả được ghi lại vào lịch sử hoạt động.
+- **Sơ đồ lớp** — bố trí chỗ ngồi có thể chỉnh sửa và in trực tiếp, với style in riêng đảm bảo hiển thị đúng màu ở cả chế độ sáng và tối.
 
-* Đăng nhập Admin.
-* Quên mật khẩu.
-* Dashboard quản trị.
-* Quản lý thông báo.
-* Quản lý liên hệ.
-* Quản lý thư viện hình ảnh.
-* Quản lý trò chơi.
-* Quản lý tài liệu.
-* Quản lý lịch học.
+### Khu quản trị (Admin Dashboard)
+
+Khu vực bảo mật bằng mật khẩu dành cho giáo viên/quản trị viên, xác thực qua Firebase Authentication:
+
+- Đăng nhập quản trị và khôi phục mật khẩu.
+- Bảng điều khiển quản trị trung tâm.
+- **Học sinh** — quản lý danh sách học sinh, ảnh đại diện, tổ nhóm và số sao.
+- **Sơ đồ lớp** — xây dựng và in bố trí chỗ ngồi.
+- **Thi đua tổ** — quản lý điểm thưởng và xếp hạng các tổ.
+- **Thẻ đặc quyền** — thêm/sửa/xóa thẻ đặc quyền; vận hành tính năng bốc thăm.
+- **Thông báo** — thêm/sửa/xóa thông báo lớp.
+- **Thời khóa biểu** — chỉnh sửa lịch học theo tuần; xuất Excel.
+- **Góc học tập** — quản lý slide bài giảng và bài tập.
+- **Trò chơi giáo dục** — quản lý kho trò chơi theo khối lớp/môn học.
+- **Thư viện ảnh** — tải lên và quản lý ảnh lớp học.
+- **Liên hệ** — xem và quản lý tin nhắn gửi từ form liên hệ.
+- **Thông báo dạng toast** — phản hồi thành công/lỗi/thông tin nhất quán cho mọi thao tác quản trị.
 
 ---
 
 ## Công nghệ sử dụng
 
-* **Next.js** - Framework React dùng để xây dựng ứng dụng web.
-* **React** - Thư viện xây dựng giao diện người dùng.
-* **TypeScript** - Ngôn ngữ mở rộng của JavaScript với hệ thống kiểu dữ liệu.
-* **Tailwind CSS** - Framework CSS dùng để xây dựng giao diện và responsive.
-* **CSS** - Sử dụng cho các style tùy chỉnh.
-* **JavaScript** - Sử dụng cho logic phía client.
-* **Firebase** - Sử dụng cho Authentication, Database và Storage.
-* **Vercel** - Sử dụng để triển khai ứng dụng.
+| Nhóm | Công nghệ |
+|---|---|
+| Framework | [Next.js](https://nextjs.org/) (App Router) |
+| Thư viện UI | [React](https://react.dev/) |
+| Ngôn ngữ | [TypeScript](https://www.typescriptlang.org/) |
+| Styling | [Tailwind CSS](https://tailwindcss.com/) + CSS tùy chỉnh (theming, dark mode, style khi in) |
+| Backend / Dữ liệu | [Firebase](https://firebase.google.com/) — Authentication, Firestore, Storage |
+| Xuất Excel | [xlsx-js-style](https://www.npmjs.com/package/xlsx-js-style) |
+| Hosting | [Vercel](https://vercel.com/) |
 
 ---
 
 ## Cấu trúc thư mục
 
-Cấu trúc thư mục chính của dự án:
-
-```text
+```
 teacher-hub/
-│
-├── .next/                              # Thư mục build của Next.js
-│
-├── app/                                # Next.js App Router
-│   │
-│   ├── admin/                          # Khu vực quản trị
-│   │   │
-│   │   ├── forgot-password/
-│   │   │   └── page.tsx                # Trang quên mật khẩu
-│   │   │
-│   │   ├── login/
-│   │   │   └── page.tsx                # Trang đăng nhập Admin
-│   │   │
-│   │   ├── admin.css                   # CSS riêng cho Admin
-│   │   └── page.tsx                    # Trang Admin
-│   │
-│   ├── globals.css                     # CSS global
-│   ├── home.css                        # CSS trang chủ
-│   ├── icon.svg                        # Icon website
-│   ├── layout.tsx                      # Layout chung
-│   └── page.tsx                        # Trang chủ
-│
-├── components/                         # Các React Component
-│   │
-│   ├── admin/
-│   │   ├── AdminAnnouncements.tsx      # Quản lý thông báo
-│   │   ├── AdminContact.tsx            # Quản lý liên hệ
-│   │   ├── AdminDashboard.tsx           # Dashboard Admin
-│   │   ├── AdminGallery.tsx            # Quản lý thư viện
-│   │   ├── AdminGames.tsx              # Quản lý trò chơi
-│   │   ├── AdminMaterials.tsx          # Quản lý tài liệu
-│   │   └── AdminSchedule.tsx           # Quản lý lịch
-│   │
-│   ├── Announcement.tsx                # Hiển thị thông báo
-│   ├── Contact.tsx                     # Khu vực liên hệ
-│   ├── ContactForm.tsx                 # Form liên hệ
-│   ├── FAQ.tsx                         # Câu hỏi thường gặp
-│   ├── Footer.tsx                      # Footer
-│   ├── Gallery.tsx                     # Thư viện hình ảnh
-│   ├── Games.tsx                       # Trò chơi
-│   ├── Hero.tsx                        # Hero section
-│   ├── LearningMaterials.tsx           # Tài liệu học tập
-│   ├── Navbar.tsx                      # Thanh điều hướng
-│   └── Schedule.tsx                    # Lịch học
-│
-├── lib/                                # Helper và utilities dùng chung
-├── public/                             # Static assets
-│
-├── .env.local                          # Environment variables local
-├── .gitignore                          # Git ignore configuration
-├── AGENTS.md                           # Hướng dẫn cho AI agents
-├── CLAUDE.md                           # Hướng dẫn cho Claude
-├── eslint.config.mjs                   # ESLint configuration
-├── next-env.d.ts                       # Next.js TypeScript definitions
-├── next.config.ts                      # Next.js configuration
-├── package.json                        # Dependencies và scripts
-├── package-lock.json                   # Dependency lock file
-├── postcss.config.mjs                 # PostCSS configuration
-├── README.md                           # Documentation
-├── tailwind.config.ts                  # Tailwind configuration
-└── tsconfig.json                       # TypeScript configuration
+├── app/              # Next.js App Router — trang, layout, route quản trị
+├── components/       # Các component UI dùng chung (trang chủ + quản trị)
+├── lib/              # Cấu hình Firebase, hàm xử lý dữ liệu (vd: tính điểm tuần)
+├── public/           # Tài nguyên tĩnh
+├── AGENTS.md         # Hướng dẫn cho AI coding agent làm việc trong repo
+├── CLAUDE.md         # Hướng dẫn riêng cho Claude khi làm việc với dự án
+├── README.md         # Bản tiếng Anh
+└── README.vi.md      # File này
 ```
 
 ---
@@ -127,15 +105,8 @@ teacher-hub/
 
 ### 1. Clone repository
 
-Tải repository về máy tính:
-
 ```bash
-git clone <repository-url>
-```
-
-Di chuyển vào thư mục dự án:
-
-```bash
+git clone https://github.com/nhunguy-swe/teacher-hub.git
 cd teacher-hub
 ```
 
@@ -145,7 +116,11 @@ cd teacher-hub
 npm install
 ```
 
-### 3. Chạy môi trường development
+### 3. Thiết lập biến môi trường
+
+Xem phần [Biến môi trường](#biến-môi-trường) bên dưới.
+
+### 4. Chạy môi trường phát triển
 
 ```bash
 npm run dev
@@ -153,7 +128,7 @@ npm run dev
 
 Sau đó mở trình duyệt tại:
 
-```text
+```
 http://localhost:3000
 ```
 
@@ -161,7 +136,7 @@ http://localhost:3000
 
 ## Biến môi trường
 
-Nếu dự án sử dụng Firebase hoặc các dịch vụ bên ngoài, hãy tạo file `.env.local`.
+Dự án sử dụng Firebase cho Authentication, Firestore và Storage. Tạo file `.env.local` ở thư mục gốc dự án:
 
 ```env
 NEXT_PUBLIC_FIREBASE_API_KEY=
@@ -172,94 +147,53 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
-Không commit thông tin nhạy cảm, private key hoặc secret key lên GitHub.
-
-File `.env.local` nên được thêm vào `.gitignore`.
+> ⚠️ Không commit file `.env.local` hoặc bất kỳ khóa bí mật/riêng tư nào lên GitHub. File này cần được liệt kê trong `.gitignore`.
 
 ---
 
-## Kiến trúc Component
+## Các lệnh có sẵn
 
-Dự án được chia thành hai nhóm component chính.
-
-### Public Components
-
-Các component dành cho người dùng:
-
-```text
-Navbar
-Hero
-Announcement
-LearningMaterials
-Schedule
-Gallery
-Games
-FAQ
-Contact
-ContactForm
-Footer
-```
-
-Các component này được sử dụng để xây dựng giao diện website chính.
-
-### Admin Components
-
-Các component dành cho khu vực quản trị:
-
-```text
-AdminDashboard
-AdminAnnouncements
-AdminContact
-AdminGallery
-AdminGames
-AdminMaterials
-AdminSchedule
-```
-
-Mỗi component Admin phụ trách một chức năng quản lý riêng.
+| Lệnh | Mô tả |
+|---|---|
+| `npm run dev` | Chạy server phát triển |
+| `npm run build` | Build ứng dụng cho production |
+| `npm start` | Chạy bản build production |
+| `npm run lint` | Kiểm tra code bằng ESLint |
 
 ---
 
-## Admin
+## Responsive
 
-Khu vực Admin được đặt tại `/admin`.
+Trang web được thiết kế responsive đầy đủ, với các breakpoint riêng cho:
 
-Các trang Admin hiện có:
+- Desktop
+- Laptop
+- Tablet
+- Mobile (bao gồm menu điều hướng dạng hamburger)
 
-```text
-/admin
-/admin/login
-/admin/forgot-password
-```
-
-Admin có thể quản lý thông báo, liên hệ, hình ảnh, trò chơi, tài liệu và lịch học.
-
-Trong các phiên bản tiếp theo, hệ thống có thể được mở rộng với Firebase Authentication, Database, Storage và phân quyền người dùng.
+Layout và khoảng cách được xử lý bằng Tailwind CSS kết hợp với CSS responsive tùy chỉnh (`@media` ở các mốc 900px, 640px và 400px).
 
 ---
 
-## 📱 Responsive
+## Dark Mode
 
-Website được thiết kế responsive và hỗ trợ nhiều kích thước màn hình:
+Teacher Hub hỗ trợ đầy đủ giao diện tối, được bật bằng class `.dark` trên phần tử gốc:
 
-* Desktop
-* Laptop
-* Tablet
-* Mobile
-
-Các breakpoint và style responsive được quản lý thông qua Tailwind CSS kết hợp với CSS tùy chỉnh.
+- Các màu theme (nền, chữ, viền, thẻ nhãn, badge) được khai báo dưới dạng biến CSS và định nghĩa lại dưới `.dark`.
+- Bảng màu của Tailwind được ghi đè ngay ở cấp biến, nên các class tiện ích như `bg-amber-50` hay `text-slate-600` tự động đổi theo dark mode — không cần viết tay `dark:` cho từng chỗ.
+- Sơ đồ lớp có bộ token màu riêng (`--sc-*`) để đảm bảo hiển thị đúng cả trên màn hình lẫn khi in, ở cả hai chế độ sáng/tối.
 
 ---
 
-## Build Production
+## Build cho Production
 
-Build project cho môi trường production:
+Build dự án cho production:
 
 ```bash
 npm run build
 ```
 
-Chạy phiên bản production:
+Chạy bản build production ở máy local:
 
 ```bash
 npm start
@@ -267,13 +201,11 @@ npm start
 
 ---
 
-## Deploy
+## Triển khai (Deployment)
 
-Dự án được định hướng triển khai trên Vercel.
+Dự án được triển khai trên **Vercel**.
 
-Quy trình triển khai cơ bản:
-
-```text
+```
 GitHub Repository
         │
         ▼
@@ -286,51 +218,51 @@ GitHub Repository
    Production
 ```
 
-Khi deploy, cần cấu hình Environment Variables trên Vercel nếu dự án sử dụng Firebase hoặc các dịch vụ bên ngoài.
+Khi triển khai, nhớ cấu hình đầy đủ **Biến môi trường** (xem phần trên) trong cài đặt dự án trên Vercel.
 
 ---
 
-## Git Workflow
-
-Các thay đổi có thể được commit bằng:
+## Quy trình Git
 
 ```bash
 git add .
-git commit -m "feat: update teacher hub"
+git commit -m "feat: thêm tính năng mới"
 git push
 ```
 
-### Quy ước Commit
+### Quy ước commit
 
-```text
-feat:      Thêm chức năng mới
-fix:       Sửa lỗi
-style:     Thay đổi giao diện / CSS
-refactor:  Thay đổi cấu trúc code
-docs:      Cập nhật tài liệu
-chore:     Cập nhật cấu hình hoặc dependency
-```
+Dự án tuân theo phong cách rút gọn của [Conventional Commits](https://www.conventionalcommits.org/):
+
+| Tiền tố | Dùng cho |
+|---|---|
+| `feat:` | Thêm tính năng mới |
+| `fix:` | Sửa lỗi |
+| `style:` | Thay đổi giao diện / CSS (không đổi logic) |
+| `refactor:` | Tái cấu trúc code, không đổi hành vi |
+| `docs:` | Cập nhật tài liệu |
+| `chore:` | Cập nhật cấu hình hoặc dependency |
 
 Ví dụ:
 
 ```bash
-git commit -m "feat: add admin schedule management"
+git commit -m "feat: thêm tính năng bốc thăm thẻ đặc quyền cho tổ"
 ```
 
 ---
 
-# QUY ĐỊNH SỬ DỤNG
+## Điều khoản sử dụng
 
-> **NGHIÊM CẤM SỬ DỤNG DỰ ÁN NÀY DƯỚI BẤT KỲ HÌNH THỨC NÀO NẾU CHƯA ĐƯỢC SỰ CHO PHÉP CỦA CHỦ SỞ HỮU.**
+> **MỌI HÌNH THỨC SỬ DỤNG DỰ ÁN NÀY ĐỀU BỊ NGHIÊM CẤM NẾU KHÔNG CÓ SỰ CHO PHÉP TRƯỚC TỪ CHỦ SỞ HỮU.**
 
-Dự án **Teacher Hub** là dự án cá nhân và toàn bộ mã nguồn, giao diện, thiết kế, nội dung, hình ảnh, tài liệu, cấu trúc thư mục, component và các thành phần liên quan thuộc quyền quản lý của chủ sở hữu.
+**Teacher Hub** là dự án cá nhân. Toàn bộ mã nguồn, giao diện, thiết kế, nội dung, hình ảnh, tài liệu, cấu trúc thư mục, component và các tài sản liên quan đều thuộc quyền sở hữu và kiểm soát của chủ dự án.
 
-Việc repository được công khai không có nghĩa là mã nguồn được cấp phép sử dụng tự do.
+Việc công khai repository này không đồng nghĩa với việc mã nguồn được cấp phép sử dụng, sao chép hay phân phối lại tự do.
 
 ---
 
 ### Teacher Hub
 
-Nền tảng cá nhân dành cho giáo viên, học sinh và tài liệu học tập.
+Nền tảng cá nhân dành cho một giáo viên, học sinh của cô, và các tài liệu học tập được chia sẻ.
 
-**© 2026 Teacher Hub — All Rights Reserved.**
+**© 2026 Teacher Hub — Bảo lưu mọi quyền.**
