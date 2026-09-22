@@ -6,7 +6,7 @@
 
 Built with **Next.js**, **React**, **TypeScript**, **Tailwind CSS**, and **Firebase**, the app ships with a public-facing class site and a full admin dashboard, with a modern, responsive interface for desktop, tablet, and mobile, plus built-in **dark mode**.
 
-🔗 **Live demo:** [teacher-hub-jet.vercel.app](https://teacher-hub-jet.vercel.app)
+🔗 **Live demo:** [teacher-hub-jet.vercel.app](https://lophoccuacotruc.vercel.app/)
 
 ---
 
