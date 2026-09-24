@@ -33,7 +33,6 @@ jobs:
 
       - name: Initialize Capacitor and Add Android
         run: |
-          npx cap init "Teacher Hub" com.teacherhub.app --web-dir out
           npx cap add android
           npx cap sync
 
