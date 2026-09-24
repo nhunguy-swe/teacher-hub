@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAuth } from "firebase/auth";
+import { getMessaging, isSupported, Messaging } from "firebase/messaging"; // Thêm Messaging vào import
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -26,3 +27,14 @@ export const db = initializeFirestore(app, {
 });
 export const storage = getStorage(app);
 export const auth = getAuth(app);
+
+// Khởi tạo Messaging an toàn và tường minh kiểu dữ liệu (tránh dùng any)
+export let messaging: Messaging | null = null;
+
+if (typeof window !== "undefined") {
+  isSupported().then((supported) => {
+    if (supported) {
+      messaging = getMessaging(app);
+    }
+  });
+}

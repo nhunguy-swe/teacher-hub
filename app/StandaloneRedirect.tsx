@@ -16,7 +16,8 @@ export default function StandaloneRedirect() {
 
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+      (window.navigator as unknown as { standalone?: boolean }).standalone ===
+        true;
 
     if (!isStandalone) {
       checked.current = true;
