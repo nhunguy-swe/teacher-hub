@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation"; // Thêm useRouter để chuyển hướng
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import Announcement from "@/components/Announcement";
@@ -16,14 +17,25 @@ import "./home.css";
 
 export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const router = useRouter();
 
+  // Kiểm tra trạng thái ghi nhớ khi vừa mở app
   useEffect(() => {
+    const lastRoute = localStorage.getItem("last_visited_route");
+    const isAdminLogged = localStorage.getItem("is_admin_logged");
+
+    // Nếu trước đó đang ở trang admin và đã đăng nhập, tự động đá về thẳng admin
+    if (lastRoute && isAdminLogged === "true") {
+      router.replace(lastRoute);
+      return; // Dừng không chạy tiếp logic render trang chủ nữa
+    }
+
     const checkScroll = () => {
       setShowScrollTop(window.scrollY > 300);
     };
     window.addEventListener("scroll", checkScroll);
     return () => window.removeEventListener("scroll", checkScroll);
-  }, []);
+  }, [router]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
