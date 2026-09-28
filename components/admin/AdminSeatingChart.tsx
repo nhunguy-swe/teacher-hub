@@ -10,6 +10,7 @@ import {
   setDoc,
   getDoc,
   updateDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import {
   TOTAL_GROUPS,
@@ -103,6 +104,35 @@ export default function AdminSeatingChart() {
 
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "students"), (snap) => {
+      const changed = snap.docChanges().filter((c) => c.type === "modified");
+      if (changed.length === 0) return;
+
+      setStudents((prev) =>
+        prev.map((s) => {
+          const c = changed.find((x) => x.doc.id === s.id);
+          return c ? { ...s, ...(c.doc.data() as Partial<Student>) } : s;
+        }),
+      );
+
+      setSeats((prev) => {
+        const next = { ...prev };
+        changed.forEach((c) => {
+          const newIdx = getGroupIndex(c.doc.data().group);
+          if (newIdx === -1) return;
+          Object.entries(next).forEach(([seatKey, sid]) => {
+            if (sid === c.doc.id && getSeatGroupIndex(seatKey) !== newIdx) {
+              delete next[seatKey];
+            }
+          });
+        });
+        return next;
+      });
+    });
+    return () => unsub();
   }, []);
 
   const handleSaveChart = async () => {
