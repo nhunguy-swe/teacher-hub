@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import {
   TOTAL_GROUPS,
+  GROUPS,
   getGroupLabel,
   getGroupIndex,
   getSeatGroupIndex,
@@ -37,11 +38,13 @@ export default function AdminSeatingChart() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const [groupTitles, setGroupTitles] = useState<string[]>([
-    "Tổ 1",
-    "Tổ 2",
-    "Tổ 3",
-  ]);
+  const groupTitles = GROUPS; // cố định: Tổ 1, Tổ 2, Tổ 3
+
+  // Thứ tự hiển thị từ trái sang phải: Tổ 3, Tổ 2, Tổ 1
+  const orderedGroups = [2, 1, 0].map((i) => ({
+    title: groupTitles[i],
+    groupIndex: i,
+  }));
 
   const [confirmResetChart, setConfirmResetChart] = useState(false);
   const [classInfo, setClassInfo] = useState<ClassInfo>(DEFAULT_CLASS_INFO);
@@ -76,10 +79,10 @@ export default function AdminSeatingChart() {
             setTeacherBoardText(data.teacherBoardText);
           }
 
-          const titles: string[] = Array.isArray(data.groupTitles)
-            ? data.groupTitles.slice(0, TOTAL_GROUPS)
-            : groupTitles;
-          setGroupTitles(titles);
+          // const titles: string[] = Array.isArray(data.groupTitles)
+          //   ? data.groupTitles.slice(0, TOTAL_GROUPS)
+          //   : groupTitles;
+          // setGroupTitles(titles);
 
           const studentById = new Map(studentList.map((s) => [s.id, s]));
           const cleanedSeats: Record<string, string> = {};
@@ -517,7 +520,7 @@ export default function AdminSeatingChart() {
 
             {/* MỚI: tab chọn tổ, chỉ hiện trên điện thoại, không đưa vào PDF */}
             <div data-html2canvas-ignore className="sm:hidden flex gap-1.5">
-              {groupTitles.map((t, i) => (
+              {orderedGroups.map(({ title: t, groupIndex: i }) => (
                 <button
                   key={i}
                   type="button"
@@ -543,7 +546,7 @@ export default function AdminSeatingChart() {
                 borderRadius: "10px",
               }}
             >
-              {groupTitles.map((title, groupIndex) => (
+              {orderedGroups.map(({ title, groupIndex }) => (
                 <div
                   key={groupIndex}
                   className={`flex-col ${
@@ -566,11 +569,7 @@ export default function AdminSeatingChart() {
                     <input
                       type="text"
                       value={title}
-                      onChange={(e) => {
-                        const newTitles = [...groupTitles];
-                        newTitles[groupIndex] = e.target.value;
-                        setGroupTitles(newTitles);
-                      }}
+                      readOnly
                       style={{
                         width: "100%",
                         textAlign: "center",
@@ -769,7 +768,7 @@ export default function AdminSeatingChart() {
             )}
 
             <div className="flex-1 overflow-y-auto max-h-125 space-y-3 pr-1 no-scrollbar">
-              {groupTitles.map((groupName, gIdx) => {
+              {orderedGroups.map(({ title: groupName, groupIndex: gIdx }) => {
                 const displayList = unassignedStudents.filter((s) => {
                   const gi = getGroupIndex(s.group, groupTitles);
                   return gi === gIdx || (gi === -1 && gIdx === 0);
