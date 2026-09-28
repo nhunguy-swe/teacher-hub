@@ -589,8 +589,8 @@ export default function AdminSeatingChart() {
                             else if (student) setPicked(student.id);
                           }}
                           style={{
-                            height: "34px",
-                            padding: "0 6px",
+                            minHeight: "40px", // trước: height: "34px"
+                            padding: "2px 4px", // trước: "0 6px"
                             borderRadius: "4px",
                             border:
                               student && picked === student.id
@@ -614,10 +614,10 @@ export default function AdminSeatingChart() {
                                 fontSize: "11px",
                                 fontWeight: "700",
                                 color: "var(--sc-name)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
+                                lineHeight: "1.2",
                                 width: "100%",
+                                // bỏ 3 dòng: overflow, textOverflow, whiteSpace: "nowrap"
+                                wordBreak: "break-word",
                               }}
                               title={student.name}
                             >
