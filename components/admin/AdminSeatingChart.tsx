@@ -82,12 +82,12 @@ export default function AdminSeatingChart() {
 
           const studentById = new Map(studentList.map((s) => [s.id, s]));
           const cleanedSeats: Record<string, string> = {};
+          const used = new Set<string>();
+
           Object.entries((data.seats || {}) as Record<string, string>).forEach(
             ([seatKey, sid]) => {
-              const s = studentById.get(sid);
-              if (!s) return;
-              const gi = getGroupIndex(s.group, titles);
-              if (gi !== -1 && gi !== getSeatGroupIndex(seatKey)) return;
+              if (!studentById.has(sid) || used.has(sid)) return;
+              used.add(sid);
               cleanedSeats[seatKey] = sid;
             },
           );
@@ -197,7 +197,8 @@ export default function AdminSeatingChart() {
           useCORS: true,
           logging: false,
           letterRendering: true,
-          windowWidth: 1100, // giả lập màn hình rộng để đủ 3 tổ
+          scrollX: 0,
+          scrollY: 0,
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
       };
@@ -210,14 +211,34 @@ export default function AdminSeatingChart() {
       };
 
       if (html2pdfFn) {
-        // Bảng màu sáng + hiện đủ 3 tổ khi chụp
-        element.classList.add("print-light", "show-all-groups");
+        // Sao chép sơ đồ ra khung ngoài màn hình, rộng cố định
+        const wrapper = document.createElement("div");
+        wrapper.style.cssText =
+          "position:fixed;left:-10000px;top:0;width:1000px;background:#fff;";
+        const clone = element.cloneNode(true) as HTMLElement;
+        clone.style.width = "1000px";
+        clone.classList.add("print-light", "show-all-groups");
+
+        // Bỏ các phần chỉ dùng trên điện thoại
+        clone
+          .querySelectorAll("[data-html2canvas-ignore]")
+          .forEach((n) => n.remove());
+
+        // Giữ nguyên nội dung các ô nhập (tên tổ, bảng giáo viên)
+        const srcInputs = element.querySelectorAll("input");
+        clone.querySelectorAll("input").forEach((inp, i) => {
+          inp.setAttribute("value", (srcInputs[i] as HTMLInputElement).value);
+        });
+
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
+
         try {
           await new Promise((r) => requestAnimationFrame(() => r(null)));
-          await html2pdfFn().from(element).set(opt).save();
+          await html2pdfFn().from(clone).set(opt).save();
           toast.success("Đã xuất file PDF sơ đồ lớp!");
         } finally {
-          element.classList.remove("print-light", "show-all-groups");
+          document.body.removeChild(wrapper);
         }
       }
     } catch (error) {
