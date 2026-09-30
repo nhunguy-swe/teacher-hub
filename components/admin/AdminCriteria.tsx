@@ -25,6 +25,14 @@ interface CriteriaItem {
   points: number;
 }
 
+const btnAmber =
+  "flex-1 h-10 px-3.5 text-xs font-bold bg-amber-50! text-amber-700! border border-amber-200 rounded-xl opacity-100! hover:bg-amber-600! hover:text-white! hover:border-amber-600 transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer " +
+  "disabled:bg-slate-50! disabled:text-slate-400! disabled:border-slate-200 disabled:shadow-none disabled:cursor-not-allowed";
+
+const btnRose =
+  "flex-1 h-10 px-3.5 text-xs font-bold bg-rose-50! text-rose-700! border border-rose-200 rounded-xl opacity-100! hover:bg-rose-600! hover:text-white! hover:border-rose-600 transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer " +
+  "disabled:bg-slate-50! disabled:text-slate-400! disabled:border-slate-200 disabled:shadow-none disabled:cursor-not-allowed";
+
 const DEFAULT_PLUS_REASONS = [
   { icon: "⭐", label: "Trả lời đúng", points: 1 },
   { icon: "🌟", label: "Phát biểu tích cực", points: 1 },
@@ -568,11 +576,7 @@ export default function AdminCriteria() {
           </div>
 
           <div className="sm:col-span-3 flex gap-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 h-10 flex justify-center px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs items-center gap-1.5"
-            >
+            <button type="submit" disabled={loading} className={btnAmber}>
               <svg
                 width="16"
                 height="16"
@@ -593,7 +597,7 @@ export default function AdminCriteria() {
               type="button"
               onClick={handleOpenBulkDelete}
               disabled={loading || criteria.length === 0}
-              className="flex-1 h-10 flex items-center justify-center px-3.5 py-2 text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 rounded-xl hover:bg-rose-600 hover:text-white hover:border-rose-600 transition-all shadow-2xs gap-1.5"
+              className={btnRose}
             >
               <svg
                 width="16"
