@@ -52,11 +52,11 @@ export default function AdminStopwatch() {
   }, [history]);
 
   useEffect(() => {
-    const audio = new Audio("/sounds/chuong-het-gio.mp3");
+    const audio = new Audio("/sounds/time-up.mp3");
     audio.preload = "auto";
     audio.onerror = () => {
       console.error(
-        "Không tải được file chuông tại /sounds/chuong-het-gio.mp3.",
+        "Không tải được file chuông tại /sounds/time-up.mp3.",
       );
     };
     audioRef.current = audio;
