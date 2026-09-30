@@ -10,6 +10,12 @@ import {
   randomInRange,
 } from "@/lib/types";
 import { useLuckyDraw } from "@/components/admin/AdminLuckyDrawContext";
+import { useLuckySounds, LUCKY_SOUNDS } from "@/lib/useLuckySounds";
+
+// 35 bước x 80ms, khớp với vòng lặp trong handleDrawFlipCard
+const FLIP_STEPS = 35;
+const FLIP_INTERVAL_MS = 80;
+const FLIP_DURATION_MS = FLIP_STEPS * FLIP_INTERVAL_MS;
 
 const FlipIcon = () => (
   <svg
@@ -58,6 +64,11 @@ export default function AdminLuckyFlipCard() {
     beginDraw,
     endDraw,
   } = useLuckyDraw();
+
+  const { playSpinSound, stopSpinSound, playWinSound } = useLuckySounds({
+    spinSrc: LUCKY_SOUNDS.flip,
+    spinDurationMs: FLIP_DURATION_MS,
+  });
 
   const [manualNames, setManualNames] = useState("");
 
@@ -158,6 +169,7 @@ export default function AdminLuckyFlipCard() {
   const handleSelectPrivilegeCard = (index: number) => {
     if (revealedPrivileges.has(index)) return;
     setRevealedPrivileges((prev) => new Set([...prev, index]));
+    playWinSound(); // 🔊
     triggerFireworks();
   };
 
@@ -188,15 +200,16 @@ export default function AdminLuckyFlipCard() {
 
   const handleDrawFlipCard = () => {
     if (activeStudents.length === 0) return;
-    if (!beginDraw()) return; // another draw already in progress (this tool or another)
+    if (!beginDraw()) return;
 
     setIsFlippingProcess(true);
     setSelectedFlipIndex(null);
     setFlippedIdx(new Set());
+    playSpinSound(); // 🔊 tiếng quay khi các thẻ nhấp nháy
 
     let currentStep = 0;
-    const maxSteps = 35;
-    const intervalTime = 80;
+    const maxSteps = FLIP_STEPS;
+    const intervalTime = FLIP_INTERVAL_MS;
 
     const interval = setInterval(() => {
       currentStep++;
@@ -215,8 +228,10 @@ export default function AdminLuckyFlipCard() {
         setSelectedFlipIndex(finalStudentIndex);
         setFlippedIdx(new Set([finalStudentIndex]));
         setIsFlippingProcess(false);
+        stopSpinSound(); // 🔊 dừng tiếng quay
 
         setWinnerPopup(selectedStudent);
+        playWinSound(); // 🔊 tiếng thắng khi hiện popup
         addWinnerToHistory(selectedStudent, "flip");
         triggerFireworks();
 
@@ -821,7 +836,7 @@ export default function AdminLuckyFlipCard() {
         </div>
       )}
 
-      {showPrivilegeScreen && currentPrivilegeWinner && (
+      {/* {showPrivilegeScreen && currentPrivilegeWinner && (
         <div
           className="fixed inset-0 z-70 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
           onClick={() => {
@@ -898,6 +913,90 @@ export default function AdminLuckyFlipCard() {
                 setCurrentPrivilegeWinner(null);
               }}
               className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+            >
+              Hoàn tất & Đóng
+            </button>
+          </div>
+        </div>
+      )} */}
+
+      {showPrivilegeScreen && currentPrivilegeWinner && (
+        <div
+          className="fixed inset-0 z-70 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => {
+            setShowPrivilegeScreen(false);
+            setCurrentPrivilegeWinner(null);
+          }}
+        >
+          <div
+            className="bg-[#0f172a] border border-[#f59e0b]/40 rounded-3xl p-6 max-w-xl w-full relative shadow-2xl flex flex-col items-center text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setShowPrivilegeScreen(false);
+                setCurrentPrivilegeWinner(null);
+              }}
+              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-[#334155] text-white hover:bg-[#475569] font-bold flex items-center justify-center transition-all cursor-pointer border border-[#64748b]"
+            >
+              ✕
+            </button>
+
+            <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-[#f59e0b]/20 text-[#fcd34d] rounded-full border border-[#f59e0b]/50 mb-2">
+              Kho báu đặc quyền
+            </span>
+            <h3 className="text-xl font-black text-white mb-1">
+              Học sinh:{" "}
+              <span className="text-[#fbbf24]">
+                {currentPrivilegeWinner.name}
+              </span>
+            </h3>
+            <p className="text-xs text-[#cbd5e1] mb-6">
+              Hãy chọn 1 ô thẻ bí mật bên dưới để khám phá đặc quyền nhận được!
+            </p>
+
+            <div className="grid grid-cols-4 gap-3 w-full mb-6">
+              {activePrivileges.map((privilegeText, i) => {
+                const isRevealed = revealedPrivileges.has(i);
+
+                return (
+                  <div
+                    key={i}
+                    onClick={() => handleSelectPrivilegeCard(i)}
+                    className={`aspect-4/5 rounded-3xl relative flex flex-col items-center justify-center p-3 font-bold text-xs shadow-xl transition-all duration-300 cursor-pointer select-none ${
+                      isRevealed
+                        ? "bg-linear-to-br from-[#fcd34d] to-[#f59e0b] scale-105 ring-2 ring-[#fde68a] shadow-[#f59e0b]/40"
+                        : "bg-[#1e293b] hover:bg-[#334155] border border-[#475569] hover:border-[#fbbf24]"
+                    }`}
+                  >
+                    {isRevealed ? (
+                      <div className="flex flex-col items-center justify-center text-center">
+                        <span className="text-2xl mb-1">✨</span>
+                        <span className="text-[11px] font-black text-[#1c1917] leading-tight">
+                          {privilegeText}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-[#fbbf24] mb-1">
+                          ?
+                        </span>
+                        <span className="text-[10px] text-[#e2e8f0] uppercase tracking-wider">
+                          Mở thẻ
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => {
+                setShowPrivilegeScreen(false);
+                setCurrentPrivilegeWinner(null);
+              }}
+              className="px-6 py-3 bg-[#f59e0b] hover:bg-[#d97706] text-[#1c1917] font-black text-xs rounded-xl shadow-lg shadow-[#f59e0b]/30 transition-all cursor-pointer"
             >
               Hoàn tất & Đóng
             </button>
