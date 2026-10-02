@@ -56,6 +56,19 @@ interface AdminStudentsProps {
   onAdded?: () => void;
 }
 
+type ReportLog = ActivityLogItem & {
+  createdAt?: { toDate: () => Date } | null;
+};
+
+interface ReportAttendance {
+  studentId: string;
+  name: string;
+  group?: string;
+  status: string;
+  reason?: string;
+  date: string;
+}
+
 interface CriteriaItem {
   id: string;
   type: "pos" | "neg";
@@ -134,6 +147,14 @@ const normalizeGroupName = (groupName?: string) => {
   return groupName.trim();
 };
 
+const removeAccents = (str: string) =>
+  str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+
 // Chuẩn hóa giới tính về đúng "Nam"/"Nữ" bất kể dữ liệu gốc viết hoa/thường khác nhau.
 const normalizeGenderLabel = (gender?: string) => {
   if (!gender) return "Nam";
@@ -199,10 +220,15 @@ export default function AdminStudents({
   );
   const [quantity, setQuantity] = useState(1);
 
+  const [criteriaSearch, setCriteriaSearch] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const closeStarModal = () => {
     setStarModal(null);
     setSelectedCriteria(null);
     setQuantity(1);
+    setCriteriaSearch("");
+    setIsExpanded(false);
   };
 
   // Modal Nhập Excel thật
@@ -212,7 +238,15 @@ export default function AdminStudents({
   >([]);
 
   const [criteriaList, setCriteriaList] = useState<CriteriaItem[]>([]);
-  const [normalizing, setNormalizing] = useState(false);
+
+  // Popup xem trước & xuất báo cáo hoạt động
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportTab, setReportTab] = useState<
+    "summary" | "points" | "attendance"
+  >("summary");
+  const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
+  const [reportAtt, setReportAtt] = useState<ReportAttendance[]>([]);
 
   // State cho popup xác nhận xóa 1 học sinh
   const [confirmDeleteStudent, setConfirmDeleteStudent] =
@@ -338,6 +372,24 @@ export default function AdminStudents({
 
     return result;
   }, [students, search, groupFilter, sortBy]);
+
+  const filteredCriteria = useMemo(() => {
+    if (!starModal) return [];
+    const wantedType = starModal.type === "plus" ? "pos" : "neg";
+    const keyword = removeAccents(criteriaSearch.trim());
+    const seen = new Set<string>();
+
+    return criteriaList.filter((item) => {
+      if (item.type !== wantedType) return false;
+
+      // Lọc trùng (cùng nhãn + cùng điểm)
+      const key = `${item.type}|${item.label.trim().toLowerCase()}|${item.points}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+
+      return !keyword || removeAccents(item.label).includes(keyword);
+    });
+  }, [criteriaList, starModal, criteriaSearch]);
 
   const attendanceCount = useMemo(() => {
     const c = { present: 0, excused: 0, absent: 0, late: 0 };
@@ -583,44 +635,160 @@ export default function AdminStudents({
     }
   };
 
-  // Quét toàn bộ học sinh và ghi lại "group"/"gender" đúng chuẩn
-  const handleNormalizeAllStudents = async () => {
-    setNormalizing(true);
+  // Xuất báo cáo hoạt động của học sinh ra file Excel (3 sheet)
+  // Mở popup và tải dữ liệu báo cáo
+  const handleOpenReport = async () => {
+    setReportTab("summary");
+    setReportOpen(true);
+    setReportLoading(true);
     try {
-      const snapshot = await getDocs(collection(db, "students"));
-      const batch = writeBatch(db);
-      let changedCount = 0;
-
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data() as StudentItem;
-        const fixedGroup = normalizeGroupName(data.group);
-        const fixedGender = normalizeGenderLabel(data.gender);
-        const needsFix =
-          data.group !== fixedGroup || data.gender !== fixedGender;
-
-        if (needsFix) {
-          changedCount++;
-          batch.update(doc(db, "students", docSnap.id), {
-            group: fixedGroup,
-            gender: fixedGender,
-          });
-        }
-      });
-
-      if (changedCount === 0) {
-        toast.success(
-          "Dữ liệu Tổ & Giới tính đã chuẩn, không cần sửa gì thêm!",
-        );
-      } else {
-        await batch.commit();
-        toast.success(`Đã chuẩn hóa ${changedCount} học sinh trong hệ thống!`);
-        fetchStudentsData();
-      }
+      const [logSnap, attSnap] = await Promise.all([
+        getDocs(
+          query(collection(db, "activityLog"), orderBy("createdAt", "desc")),
+        ),
+        getDocs(collection(db, "attendanceRecords")),
+      ]);
+      setReportLogs(logSnap.docs.map((d) => d.data() as ReportLog));
+      setReportAtt(attSnap.docs.map((d) => d.data() as ReportAttendance));
     } catch (error) {
-      console.error("Lỗi khi chuẩn hóa dữ liệu:", error);
-      toast.error("Không thể chuẩn hóa dữ liệu Tổ & Giới tính.");
+      console.error("Lỗi tải dữ liệu báo cáo:", error);
+      toast.error("Không thể tải dữ liệu báo cáo.");
     } finally {
-      setNormalizing(false);
+      setReportLoading(false);
+    }
+  };
+
+  // Sheet 1: Tổng hợp theo học sinh
+  const reportSummaryRows = useMemo(() => {
+    const sorted = [...students].sort((a, b) => {
+      const ga = normalizeGroupName(a.group);
+      const gb = normalizeGroupName(b.group);
+      return ga !== gb ? ga.localeCompare(gb) : a.name.localeCompare(b.name);
+    });
+
+    return sorted.map((s, i) => {
+      const myLogs = reportLogs.filter(
+        (l) => l.name === s.name && l.type !== "attendance",
+      );
+      const plus = myLogs
+        .filter((l) => l.delta > 0)
+        .reduce((sum, l) => sum + l.delta, 0);
+      const minus = myLogs
+        .filter((l) => l.delta < 0)
+        .reduce((sum, l) => sum + l.delta, 0);
+      const myAtt = reportAtt.filter((a) => a.studentId === s.id);
+      const countAtt = (st: string) =>
+        myAtt.filter((a) => a.status === st).length;
+
+      return {
+        STT: i + 1,
+        "Họ và tên": s.name,
+        Tổ: normalizeGroupName(s.group),
+        "Giới tính": normalizeGenderLabel(s.gender),
+        "Chức vụ": s.position || "Chưa cập nhật",
+        "Điểm tuần": WEEKLY_BASE_POINTS + (weeklyDeltaMap[s.name] || 0),
+        "Sao tích lũy": s.stars || 0,
+        "Tổng điểm đã cộng": plus,
+        "Tổng điểm đã trừ": minus,
+        "Số buổi có phép": countAtt("excused"),
+        "Số buổi vắng": countAtt("absent"),
+        "Số buổi đi muộn": countAtt("late"),
+      };
+    });
+  }, [students, reportLogs, reportAtt, weeklyDeltaMap]);
+
+  // Sheet 2: Lịch sử cộng/trừ điểm
+  const reportPointRows = useMemo(() => {
+    const groupByName: Record<string, string> = {};
+    students.forEach((s) => {
+      groupByName[s.name] = normalizeGroupName(s.group);
+    });
+    return reportLogs
+      .filter((l) => l.type !== "attendance")
+      .map((l) => ({
+        "Thời gian": l.createdAt?.toDate
+          ? l.createdAt.toDate().toLocaleString("vi-VN")
+          : "",
+        "Họ và tên": l.name,
+        Tổ: groupByName[l.name] || "",
+        "Nội dung": l.label,
+        Điểm: l.delta,
+      }));
+  }, [students, reportLogs]);
+
+  // Sheet 3: Lịch sử điểm danh (bỏ các buổi "Có mặt")
+  const reportAttRows = useMemo(
+    () =>
+      reportAtt
+        .filter((a) => a.status !== "present")
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map((a) => ({
+          Ngày: a.date.split("-").reverse().join("/"),
+          "Họ và tên": a.name,
+          Tổ: normalizeGroupName(a.group),
+          "Trạng thái": STATUS_META[a.status]?.label || a.status,
+          "Lý do": a.reason || "",
+        })),
+    [reportAtt],
+  );
+
+  const reportPreviewRows: Record<string, string | number>[] =
+    reportTab === "summary"
+      ? reportSummaryRows
+      : reportTab === "points"
+        ? reportPointRows
+        : reportAttRows;
+
+  // Tô màu số cộng/trừ trong bảng xem trước
+  const reportCellClass = (key: string, value: string | number) => {
+    if (typeof value !== "number") return "text-slate-700";
+    if (
+      key === "Điểm" ||
+      key === "Tổng điểm đã cộng" ||
+      key === "Tổng điểm đã trừ"
+    ) {
+      if (value > 0) return "text-emerald-600 font-bold";
+      if (value < 0) return "text-rose-600 font-bold";
+      return "text-slate-400";
+    }
+    return "text-slate-700";
+  };
+
+  // Tải file Excel (3 sheet)
+  const handleExportReport = () => {
+    try {
+      const makeSheet = (rows: Record<string, unknown>[], widths: number[]) => {
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws["!cols"] = widths.map((wch) => ({ wch }));
+        return ws;
+      };
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(
+          reportSummaryRows,
+          [5, 26, 8, 10, 18, 11, 13, 16, 16, 15, 13, 15],
+        ),
+        "Tổng hợp",
+      );
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(reportPointRows, [20, 26, 8, 50, 8]),
+        "Lịch sử điểm",
+      );
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(reportAttRows, [12, 26, 8, 12, 40]),
+        "Lịch sử điểm danh",
+      );
+
+      XLSX.writeFile(wb, `Bao-cao-hoc-sinh-${getTodayKey()}.xlsx`);
+      toast.success("Xuất file Excel thành công!");
+      setReportOpen(false);
+    } catch (error) {
+      console.error("Lỗi xuất Excel:", error);
+      toast.error("Không thể xuất file Excel.");
     }
   };
 
@@ -831,39 +999,29 @@ export default function AdminStudents({
             Nhập danh sách excel
           </button>
 
-          {/* Nút Chuẩn hóa dữ liệu Tổ & Giới tính */}
+          {/* Nút Xuất Excel báo cáo */}
           <button
             type="button"
-            onClick={handleNormalizeAllStudents}
-            disabled={normalizing}
-            title="Ghi lại đúng định dạng Tổ x / Nam-Nữ cho toàn bộ học sinh trong hệ thống"
-            className="px-3.5 py-2 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
+            onClick={handleOpenReport}
+            className="px-3.5 py-2 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
             <svg
-              className="shrink-0"
+              xmlns="http://www.w3.org/2000/svg"
               width="16"
               height="16"
-              fill="none"
               viewBox="0 0 24 24"
+              fill="none"
               stroke="currentColor"
               strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-download shrink-0"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            {normalizing ? (
-              "Đang chuẩn hóa..."
-            ) : (
-              <>
-                <span className="sm:hidden">Chuẩn hóa</span>
-                <span className="hidden sm:inline">
-                  Chuẩn hóa Tổ & Giới tính
-                </span>
-              </>
-            )}
+              <path d="M12 15V3" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m7 10 5 5 5-5" />
+            </svg>{" "}
+            Xuất Excel báo cáo
           </button>
         </div>
       </div>
@@ -1177,6 +1335,124 @@ export default function AdminStudents({
           })
         )}
       </div>
+
+      {/* POPUP XEM & XUẤT BÁO CÁO HOẠT ĐỘNG HỌC SINH */}
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 shadow-xl border border-slate-100 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-800 text-base m-0">
+                Xem &amp; xuất báo cáo hoạt động học sinh
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Chọn nội dung xem trước */}
+            <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-xs font-bold text-slate-600 shrink-0">
+                Nội dung:
+              </span>
+              <select
+                value={reportTab}
+                onChange={(e) =>
+                  setReportTab(
+                    e.target.value as "summary" | "points" | "attendance",
+                  )
+                }
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="summary">Tổng hợp theo học sinh</option>
+                <option value="points">Lịch sử cộng/trừ điểm</option>
+                <option value="attendance">Lịch sử điểm danh</option>
+              </select>
+            </div>
+
+            {/* Bảng xem trước */}
+            <div className="border border-slate-200 rounded-xl flex-1 overflow-auto">
+              {reportLoading ? (
+                <p className="text-xs text-slate-400 text-center py-10">
+                  Đang tải dữ liệu...
+                </p>
+              ) : reportPreviewRows.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-10">
+                  Chưa có dữ liệu trong mục này.
+                </p>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                  <thead className="sticky top-0">
+                    <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                      {Object.keys(reportPreviewRows[0]).map((key) => (
+                        <th key={key} className="p-2.5 font-bold">
+                          {key}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {reportPreviewRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80">
+                        {Object.entries(row).map(([key, value]) => (
+                          <td
+                            key={key}
+                            className={`p-2.5 ${reportCellClass(key, value)}`}
+                          >
+                            {typeof value === "number" &&
+                            value > 0 &&
+                            key === "Điểm"
+                              ? `+${value}`
+                              : value}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={handleExportReport}
+                disabled={reportLoading || reportSummaryRows.length === 0}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="lucide lucide-download"
+                >
+                  <path d="M12 15V3" />
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <path d="m7 10 5 5 5-5" />
+                </svg>{" "}
+                Tải file Excel (.xlsx)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* POPUP THÊM HỌC SINH MỚI */}
       {addModalOpen && (
@@ -1662,10 +1938,13 @@ export default function AdminStudents({
       )}
 
       {/* Modal Cộng/Trừ Điểm Sao */}
-      {/* Modal Cộng/Trừ Điểm Sao */}
       {starModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
-          <div className="bg-white p-6 rounded-3xl w-full max-w-lg border border-slate-100 shadow-2xl space-y-6">
+          <div
+            className={`bg-white p-6 rounded-3xl w-full border border-slate-100 shadow-2xl space-y-5 transition-all duration-200 ${
+              isExpanded ? "max-w-5xl" : "max-w-lg"
+            }`}
+          >
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3
                 className={`text-base font-extrabold m-0 ${starModal.type === "plus" ? "text-emerald-700" : "text-rose-700"}`}
@@ -1673,55 +1952,107 @@ export default function AdminStudents({
                 {starModal.type === "plus" ? "Cộng điểm" : "Trừ điểm"}:{" "}
                 {starModal.student.name.toUpperCase()}
               </h3>
-              <button
-                onClick={closeStarModal}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Nút phóng to / thu nhỏ - chỉ hiện trên máy tính */}
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded((v) => !v)}
+                  title={isExpanded ? "Thu nhỏ" : "Phóng to"}
+                  className="hidden lg:flex text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full items-center justify-center transition-colors cursor-pointer"
+                >
+                  {isExpanded ? (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={closeStarModal}
+                  className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {!selectedCriteria ? (
-              /* Bước 1: chọn tiêu chí */
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
-                {criteriaList
-                  .filter((item) =>
-                    starModal.type === "plus"
-                      ? item.type === "pos"
-                      : item.type === "neg",
-                  )
-                  .map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setSelectedCriteria(item);
-                        setQuantity(1);
-                      }}
-                      className={`p-3 rounded-3xl border text-left flex flex-col justify-between transition hover:scale-[1.02] ${
-                        starModal.type === "plus"
-                          ? "bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50 text-emerald-900"
-                          : "bg-rose-50/40 border-rose-100 hover:bg-rose-50 text-rose-900"
-                      }`}
-                    >
-                      <div className="flex items-start gap-1.5">
-                        <span className="text-sm shrink-0">{item.icon}</span>
-                        <span className="text-xs font-bold leading-snug">
-                          {item.label}
-                        </span>
-                      </div>
-                      <span
-                        className={`text-xs font-extrabold mt-2 ${
+              /* Bước 1: tìm & chọn tiêu chí */
+              <div className="space-y-3">
+                <input
+                  autoFocus
+                  type="text"
+                  value={criteriaSearch}
+                  onChange={(e) => setCriteriaSearch(e.target.value)}
+                  placeholder="Tìm tiêu chí..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-amber-500 transition-colors"
+                />
+
+                <div
+                  className={`grid grid-cols-2 sm:grid-cols-4 gap-2.5 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none ${
+                    isExpanded ? "lg:grid-cols-6 max-h-[60vh]" : "max-h-60"
+                  }`}
+                >
+                  {filteredCriteria.length === 0 ? (
+                    <p className="col-span-full text-xs text-slate-400 text-center py-6 m-0">
+                      Không tìm thấy tiêu chí phù hợp.
+                    </p>
+                  ) : (
+                    filteredCriteria.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setSelectedCriteria(item);
+                          setQuantity(1);
+                        }}
+                        className={`p-3 rounded-3xl border text-left flex flex-col justify-between transition hover:scale-[1.02] ${
                           starModal.type === "plus"
-                            ? "text-emerald-600"
-                            : "text-rose-600"
+                            ? "bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50 text-emerald-900 dark:text-emerald-700"
+                            : "bg-rose-50/40 border-rose-100 hover:bg-rose-50 text-rose-900 dark:text-rose-700"
                         }`}
                       >
-                        {starModal.type === "plus"
-                          ? `+${Math.abs(item.points)} điểm`
-                          : `-${Math.abs(item.points)} điểm`}
-                      </span>
-                    </button>
-                  ))}
+                        <div className="flex items-start gap-1.5">
+                          <span className="text-sm shrink-0">{item.icon}</span>
+                          <span className="text-xs font-bold leading-snug">
+                            {item.label}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-xs font-extrabold mt-2 ${
+                            starModal.type === "plus"
+                              ? "text-emerald-600 dark:text-emerald-700"
+                              : "text-rose-600 dark:text-rose-700"
+                          }`}
+                        >
+                          {starModal.type === "plus"
+                            ? `+${Math.abs(item.points)} điểm`
+                            : `-${Math.abs(item.points)} điểm`}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
             ) : (
               /* Bước 2: nhập số lượng */
@@ -1729,8 +2060,8 @@ export default function AdminStudents({
                 <div
                   className={`flex items-center gap-2 p-3 rounded-3xl border ${
                     starModal.type === "plus"
-                      ? "bg-emerald-50/40 border-emerald-100 text-emerald-900"
-                      : "bg-rose-50/40 border-rose-100 text-rose-900"
+                      ? "bg-emerald-50/40 border-emerald-100 text-emerald-900 dark:text-emerald-700"
+                      : "bg-rose-50/40 border-rose-100 text-rose-900 dark:text-rose-700"
                   }`}
                 >
                   <span className="text-lg shrink-0">
@@ -1785,8 +2116,8 @@ export default function AdminStudents({
                 <p
                   className={`text-sm font-extrabold text-center m-0 ${
                     starModal.type === "plus"
-                      ? "text-emerald-600"
-                      : "text-rose-600"
+                      ? "text-emerald-600 dark:text-emerald-700"
+                      : "text-rose-600 dark:text-rose-700"
                   }`}
                 >
                   Tổng: {starModal.type === "plus" ? "+" : "-"}
@@ -2026,6 +2357,7 @@ export default function AdminStudents({
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
                 />
                 <button
+                  type="button"
                   onClick={() =>
                     handleSetStatus(
                       attendanceModalStudent,
@@ -2034,7 +2366,7 @@ export default function AdminStudents({
                     )
                   }
                   disabled={!attReason.trim()}
-                  className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition"
+                  className="w-full px-3.5 py-2.5 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-amber-50 disabled:hover:text-amber-700 disabled:hover:border-amber-200"
                 >
                   Lưu điểm danh
                 </button>
@@ -2042,8 +2374,9 @@ export default function AdminStudents({
             )}
 
             <button
+              type="button"
               onClick={closeAttendanceModal}
-              className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition"
+              className="w-full px-3.5 py-2.5 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
             >
               Đóng
             </button>
