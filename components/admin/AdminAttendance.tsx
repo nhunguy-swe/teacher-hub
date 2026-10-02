@@ -14,6 +14,8 @@ import {
   getDocs,
   where,
   setDoc,
+  addDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 
 interface StudentItem {
@@ -23,6 +25,7 @@ interface StudentItem {
   status?: "present" | "excused" | "absent" | "late";
   attendanceDate?: string;
   avatarUrl?: string;
+  reason?: string;
 }
 
 interface AttendanceRecord {
@@ -34,6 +37,7 @@ interface AttendanceRecord {
   date: string;
   month: string;
   year: string;
+  reason?: string;
 }
 
 interface AggregatedReportItem {
@@ -52,7 +56,7 @@ const STATUS_META: Record<
   present: {
     label: "Có mặt",
     active: "bg-emerald-500 text-white border-emerald-500",
-    icon: "✅",
+    icon: "🟢",
   },
   excused: {
     label: "Có phép",
@@ -67,7 +71,7 @@ const STATUS_META: Record<
   late: {
     label: "Đi muộn",
     active: "bg-amber-500 text-white border-amber-500",
-    icon: "🕒",
+    icon: "🟠",
   },
 };
 
@@ -175,6 +179,14 @@ export default function AdminAttendance() {
   >([]);
   const [isLoadingReport, setIsLoadingReport] = useState(false);
 
+  // Popup nhập lý do
+  const [reasonModal, setReasonModal] = useState<{
+    student: StudentItem;
+    status: "excused" | "absent" | "late";
+  } | null>(null);
+  const [reasonText, setReasonText] = useState("");
+  const [savingReason, setSavingReason] = useState(false);
+
   const todayKey = getTodayKey();
 
   useEffect(() => {
@@ -193,6 +205,7 @@ export default function AdminAttendance() {
           batch.update(doc(db, "students", studentId), {
             status: "present",
             attendanceDate: today,
+            reason: "",
           });
 
           const recordId = `${studentId}_${today}`;
@@ -203,6 +216,7 @@ export default function AdminAttendance() {
               name: docData.name || "",
               group: docData.group || "",
               status: "present",
+              reason: "",
               date: today,
               month: today.slice(0, 7),
               year: today.slice(0, 4),
@@ -212,9 +226,10 @@ export default function AdminAttendance() {
 
           return {
             id: studentId,
+            ...docData,
             status: "present",
             attendanceDate: today,
-            ...docData,
+            reason: "",
           } as StudentItem;
         }
 
@@ -256,25 +271,27 @@ export default function AdminAttendance() {
     );
   }, [students, searchTerm]);
 
-  const handleSetStatus = async (id: string, status: string) => {
+  // Lưu điểm danh + lý do
+  const saveAttendance = async (
+    s: StudentItem,
+    status: string,
+    reason: string,
+  ) => {
     try {
-      const studentObj = students.find((s) => s.id === id);
-      const studentName = studentObj ? studentObj.name : "";
-      const studentGroup = studentObj ? studentObj.group : "";
-
-      await updateDoc(doc(db, "students", id), {
+      await updateDoc(doc(db, "students", s.id), {
         status,
+        reason,
         attendanceDate: todayKey,
       });
 
-      const recordId = `${id}_${todayKey}`;
       await setDoc(
-        doc(db, "attendanceRecords", recordId),
+        doc(db, "attendanceRecords", `${s.id}_${todayKey}`),
         {
-          studentId: id,
-          name: studentName,
-          group: studentGroup,
+          studentId: s.id,
+          name: s.name,
+          group: s.group || "",
           status,
+          reason,
           date: todayKey,
           month: todayKey.slice(0, 7),
           year: todayKey.slice(0, 4),
@@ -282,13 +299,54 @@ export default function AdminAttendance() {
         { merge: true },
       );
 
-      toast.success(
-        `Đã điểm danh "${studentName}": ${STATUS_META[status]?.label || status}`,
-      );
+      // Ghi vào lịch sử học sinh (delta = 0 nên không ảnh hưởng điểm)
+      if (status !== "present") {
+        await addDoc(collection(db, "activityLog"), {
+          name: s.name,
+          type: "attendance",
+          status,
+          reason,
+          label: `${STATUS_META[status].icon} ${STATUS_META[status].label} (${reason}) - ${todayKey
+            .split("-")
+            .reverse()
+            .join("/")}`,
+          delta: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      toast.success(`Đã điểm danh "${s.name}": ${STATUS_META[status]?.label}`);
     } catch (err) {
       console.error(err);
       toast.error("Không thể cập nhật điểm danh");
     }
+  };
+
+  // Bấm nút trạng thái
+  const handleClickStatus = (s: StudentItem, status: string) => {
+    if (status === "present") {
+      saveAttendance(s, "present", "");
+      return;
+    }
+    setReasonText(s.status === status ? s.reason || "" : "");
+    setReasonModal({
+      student: s,
+      status: status as "excused" | "absent" | "late",
+    });
+  };
+
+  const handleConfirmReason = async () => {
+    if (!reasonModal) return;
+    const reason = reasonText.trim();
+    if (!reason) {
+      toast.error("Vui lòng nhập lý do");
+      return;
+    }
+    setSavingReason(true);
+    await saveAttendance(reasonModal.student, reasonModal.status, reason);
+    setSavingReason(false);
+    setReasonModal(null);
+    setReasonText("");
   };
 
   const processAggregatedData = useCallback(
@@ -348,7 +406,7 @@ export default function AdminAttendance() {
             uniqueMap.set(data.studentId, { ...data, id: d.id });
           });
 
-          // === THÊM ĐOẠN NÀY: TỰ ĐỘNG KHỞI TẠO NẾU NGÀY ĐÓ CHƯA CÓ BẢN GHI NÀO ===
+          // Tự động khởi tạo nếu ngày đó chưa có bản ghi nào
           if (uniqueMap.size === 0 && students.length > 0) {
             const batch = writeBatch(db);
             students.forEach((student) => {
@@ -358,6 +416,7 @@ export default function AdminAttendance() {
                 name: student.name,
                 group: student.group || "",
                 status: "present",
+                reason: "",
                 date: selectedDate,
                 month: selectedDate.slice(0, 7),
                 year: selectedDate.slice(0, 4),
@@ -369,7 +428,6 @@ export default function AdminAttendance() {
             });
             await batch.commit();
           }
-          // =======================================================================
 
           docsData = Array.from(uniqueMap.values());
           docsData.sort((a, b) => a.name.localeCompare(b.name));
@@ -424,10 +482,11 @@ export default function AdminAttendance() {
       let fileName = "";
 
       if (reportType === "daily") {
-        csvContent += `STT,Họ và Tên,Tổ,Ngày,Trạng thái\n`;
+        csvContent += `STT,Họ và Tên,Tổ,Ngày,Trạng thái,Lý do\n`;
         dailyReportData.forEach((item, index) => {
           const label = STATUS_META[item.status]?.label || item.status;
-          csvContent += `${index + 1},"${item.name}","${item.group || ""}","${item.date}","${label}"\n`;
+          const reason = (item.reason || "").replace(/"/g, '""');
+          csvContent += `${index + 1},"${item.name}","${item.group || ""}","${item.date}","${label}","${reason}"\n`;
         });
         fileName = `Bao_Cao_Ngay_${selectedDate}.csv`;
       } else {
@@ -573,7 +632,7 @@ export default function AdminAttendance() {
                   key={s.id}
                   className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-50/70 border border-slate-200/80 rounded-3xl px-4 py-3"
                 >
-                  {/* Tầng trên: avatar + tên + tổ */}
+                  {/* Tầng trên: avatar + tên + lý do + tổ */}
                   <div className="flex items-center gap-3 sm:flex-1 min-w-0">
                     <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 font-extrabold flex items-center justify-center text-xs shrink-0 overflow-hidden">
                       {s.avatarUrl ? (
@@ -592,9 +651,16 @@ export default function AdminAttendance() {
                           .toUpperCase()
                       )}
                     </div>
-                    <span className="font-bold text-slate-800 text-sm flex-1 min-w-0 wrap-break-word">
-                      {s.name}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-bold text-slate-800 text-sm wrap-break-word block">
+                        {s.name}
+                      </span>
+                      {s.status !== "present" && s.reason && (
+                        <p className="text-[11px] text-slate-500 italic m-0 mt-0.5">
+                          Lý do: {s.reason}
+                        </p>
+                      )}
+                    </div>
                     {normalizedGroup && (
                       <span
                         className={`text-[10px] font-bold ${groupStyle.badgeText} ${groupStyle.badgeBg} border ${groupStyle.badgeBorder} rounded-full px-2 py-0.5 shrink-0`}
@@ -609,7 +675,7 @@ export default function AdminAttendance() {
                     {Object.entries(STATUS_META).map(([key, m]) => (
                       <button
                         key={key}
-                        onClick={() => handleSetStatus(s.id, key)}
+                        onClick={() => handleClickStatus(s, key)}
                         className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 text-[10px] sm:text-[10.5px] font-bold px-1 sm:px-2.5 py-2 sm:py-1.5 rounded-lg border transition-all cursor-pointer whitespace-nowrap ${
                           s.status === key
                             ? m.active
@@ -627,6 +693,62 @@ export default function AdminAttendance() {
           )}
         </div>
       </div>
+
+      {/* Popup nhập lý do */}
+      {reasonModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white p-6 rounded-3xl w-full max-w-sm border border-[#EFE8D8] shadow-xl space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-800 m-0">
+                {STATUS_META[reasonModal.status].icon}{" "}
+                {STATUS_META[reasonModal.status].label}:{" "}
+                {reasonModal.student.name}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 m-0">
+                Nhập lý do để lưu vào điểm danh và lịch sử.
+              </p>
+            </div>
+
+            <input
+              autoFocus
+              type="text"
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleConfirmReason()}
+              placeholder={
+                reasonModal.status === "late"
+                  ? "VD: Kẹt xe, ngủ quên..."
+                  : reasonModal.status === "excused"
+                    ? "VD: Ốm, có việc gia đình..."
+                    : "VD: Không rõ lý do..."
+              }
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
+            />
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setReasonModal(null);
+                  setReasonText("");
+                }}
+                disabled={savingReason}
+                className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReason}
+                disabled={savingReason || !reasonText.trim()}
+                className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
+              >
+                {savingReason ? "Đang lưu..." : "Lưu"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showReportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
@@ -688,9 +810,9 @@ export default function AdminAttendance() {
                         : selectedDate.slice(0, 7)
                     }
                     onChange={(e) => {
-                      const val = e.target.value; // Giá trị từ input type="date" luôn là YYYY-MM-DD
+                      const val = e.target.value;
                       if (reportType === "daily") {
-                        setSelectedDate(val); // val chuẩn YYYY-MM-DD (VD: 2026-09-19)
+                        setSelectedDate(val);
                       } else {
                         setSelectedDate(val + "-01");
                       }
@@ -720,6 +842,7 @@ export default function AdminAttendance() {
                       <th className="p-2.5 font-bold w-32 text-center">
                         Trạng thái
                       </th>
+                      <th className="p-2.5 font-bold">Lý do</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -740,6 +863,9 @@ export default function AdminAttendance() {
                             <span className="inline-flex items-center gap-1 font-bold text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
                               {meta?.icon} {meta?.label}
                             </span>
+                          </td>
+                          <td className="p-2.5 text-slate-600">
+                            {item.reason || "-"}
                           </td>
                         </tr>
                       );

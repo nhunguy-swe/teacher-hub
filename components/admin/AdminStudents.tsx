@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   writeBatch,
   getDocs,
+  setDoc,
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
 import {
@@ -37,6 +38,7 @@ interface StudentItem {
   stars?: number;
   status?: string;
   avatarUrl?: string;
+  reason?: string;
 }
 
 interface ActivityLogItem {
@@ -44,6 +46,9 @@ interface ActivityLogItem {
   label: string;
   delta: number;
   createdAt?: unknown;
+  type?: string;
+  status?: string;
+  reason?: string;
 }
 
 interface AdminStudentsProps {
@@ -76,7 +81,7 @@ const STATUS_META: Record<
   present: {
     label: "Có mặt",
     active: "bg-emerald-500 text-white border-emerald-500",
-    icon: "✅",
+    icon: "🟢",
   },
   excused: {
     label: "Có phép",
@@ -91,7 +96,7 @@ const STATUS_META: Record<
   late: {
     label: "Đi muộn",
     active: "bg-amber-500 text-white border-amber-500",
-    icon: "🕒",
+    icon: "🟠",
   },
 };
 
@@ -138,6 +143,11 @@ const normalizeGenderLabel = (gender?: string) => {
   return "Nam";
 };
 
+const getTodayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export default function AdminStudents({
   onUpdated,
   onAdded,
@@ -163,7 +173,6 @@ export default function AdminStudents({
 
   // Modal Thêm học sinh đầy đủ
   const [addModalOpen, setAddModalOpen] = useState(false);
-  // Thêm dòng này vào phần khai báo state của component AdminStudents
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [deleteSearchQuery, setDeleteSearchQuery] = useState("");
@@ -184,8 +193,17 @@ export default function AdminStudents({
     type: "plus" | "minus";
     student: StudentItem;
   } | null>(null);
-  const [, setCustomReason] = useState("");
-  const [, setCustomPoints] = useState<number>(1);
+
+  const [selectedCriteria, setSelectedCriteria] = useState<CriteriaItem | null>(
+    null,
+  );
+  const [quantity, setQuantity] = useState(1);
+
+  const closeStarModal = () => {
+    setStarModal(null);
+    setSelectedCriteria(null);
+    setQuantity(1);
+  };
 
   // Modal Nhập Excel thật
   const [excelModalOpen, setExcelModalOpen] = useState(false);
@@ -193,7 +211,6 @@ export default function AdminStudents({
     Record<string, unknown>[]
   >([]);
 
-  // Thêm vào trong component của bạn:
   const [criteriaList, setCriteriaList] = useState<CriteriaItem[]>([]);
   const [normalizing, setNormalizing] = useState(false);
 
@@ -213,13 +230,17 @@ export default function AdminStudents({
     { name: string; delta: number; createdAt?: { toDate: () => Date } | null }[]
   >([]);
 
+  // State điểm danh có lý do
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [attReason, setAttReason] = useState("");
+
   useEffect(() => {
     const q = query(collection(db, "students"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const studentList = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      })) as StudentItem[]; // Đổi thành StudentItem
+      })) as StudentItem[];
       setStudents(studentList);
     });
     return () => unsubscribe();
@@ -391,16 +412,15 @@ export default function AdminStudents({
     if (selectedStudentIds.length === 0) return;
     setBatchDeleting(true);
     try {
-      // Xóa đồng thời các học sinh đã chọn trên Firestore
       const count = selectedStudentIds.length;
       await Promise.all(
         selectedStudentIds.map((id) => deleteDoc(doc(db, "students", id))),
       );
 
       toast.success(`Đã xóa ${count} học sinh khỏi hệ thống!`);
-      setDeleteModalOpen(false); // Đóng popup danh sách
-      setSelectedStudentIds([]); // Reset danh sách đã chọn
-      fetchStudentsData(); // Tải lại bảng dữ liệu
+      setDeleteModalOpen(false);
+      setSelectedStudentIds([]);
+      fetchStudentsData();
     } catch (error) {
       console.error("Lỗi khi xóa hàng loạt:", error);
       toast.error("Có lỗi xảy ra khi xóa học sinh.");
@@ -429,7 +449,7 @@ export default function AdminStudents({
           .map((row) => {
             if (!row) return null;
 
-            // Sửa lại index 3 (Cột D) chính là Họ tên học sinh
+            // index 3 (Cột D) là Họ tên học sinh
             const name = String(row[3] || "").trim();
 
             if (
@@ -446,10 +466,10 @@ export default function AdminStudents({
             return {
               name: name,
               group: "Tổ 1",
-              dob: String(row[4] || ""), // Cột E (index 4): Ngày sinh
-              gender: String(row[5] || ""), // Cột F (index 5): Giới tính
-              nation: String(row[6] || "Kinh"), // Cột G (index 6): Dân tộc
-              statusText: String(row[7] || "Đang học"), // Cột H (index 7): Trạng thái
+              dob: String(row[4] || ""), // Cột E: Ngày sinh
+              gender: String(row[5] || ""), // Cột F: Giới tính
+              nation: String(row[6] || "Kinh"), // Cột G: Dân tộc
+              statusText: String(row[7] || "Đang học"), // Cột H: Trạng thái
             };
           })
           .filter(
@@ -489,8 +509,8 @@ export default function AdminStudents({
             group: String(row["group"] || GROUPS[0]),
             gender: String(row["gender"] || "Nam"),
             dob: String(row["dob"] || "Chưa cập nhật"),
-            nation: String(row["nation"] || "Kinh"), // Thêm dân tộc
-            statusText: String(row["statusText"] || "Đang học"), // Thêm trạng thái
+            nation: String(row["nation"] || "Kinh"),
+            statusText: String(row["statusText"] || "Đang học"),
             stars: 0,
             status: "present",
             avatarUrl: "",
@@ -513,7 +533,7 @@ export default function AdminStudents({
   };
 
   const handleUpdate = async () => {
-    if (!editItem || !editItem.id) return; // Kiểm tra kỹ id không được undefined
+    if (!editItem || !editItem.id) return;
 
     setLoading(true);
     try {
@@ -563,8 +583,7 @@ export default function AdminStudents({
     }
   };
 
-  // Quét toàn bộ học sinh và ghi lại "group"/"gender" đúng chuẩn ("Tổ x", "Nam"/"Nữ")
-  // trực tiếp vào Firestore, chỉ cập nhật những bản ghi đang lưu sai định dạng.
+  // Quét toàn bộ học sinh và ghi lại "group"/"gender" đúng chuẩn
   const handleNormalizeAllStudents = async () => {
     setNormalizing(true);
     try {
@@ -605,23 +624,76 @@ export default function AdminStudents({
     }
   };
 
-  const handleSetStatus = async (id: string, status: string) => {
+  const closeAttendanceModal = () => {
+    setAttendanceModalStudent(null);
+    setPendingStatus(null);
+    setAttReason("");
+  };
+
+  const handleSetStatus = async (
+    student: StudentItem,
+    status: string,
+    reason = "",
+  ) => {
+    if (!student.id) return;
+    const today = getTodayKey();
     try {
-      await updateDoc(doc(db, "students", id), { status });
+      await updateDoc(doc(db, "students", student.id), {
+        status,
+        reason,
+        attendanceDate: today,
+      });
+
+      // Đồng bộ sang báo cáo điểm danh
+      await setDoc(
+        doc(db, "attendanceRecords", `${student.id}_${today}`),
+        {
+          studentId: student.id,
+          name: student.name,
+          group: student.group || "",
+          status,
+          reason,
+          date: today,
+          month: today.slice(0, 7),
+          year: today.slice(0, 4),
+        },
+        { merge: true },
+      );
+
+      // Ghi vào lịch sử học sinh (delta = 0 nên không ảnh hưởng điểm)
+      if (status !== "present") {
+        await addDoc(collection(db, "activityLog"), {
+          name: student.name,
+          type: "attendance",
+          status,
+          reason,
+          label: `${STATUS_META[status].icon} ${STATUS_META[status].label} (${reason}) - ${today
+            .split("-")
+            .reverse()
+            .join("/")}`,
+          delta: 0,
+          createdAt: serverTimestamp(),
+        });
+      }
+
       toast.success(
         `Đã cập nhật điểm danh: ${STATUS_META[status]?.label || status}`,
       );
-      setAttendanceModalStudent(null);
+      closeAttendanceModal();
     } catch {
       toast.error("Không thể cập nhật điểm danh");
     }
   };
 
-  const handleApplyPoints = async (deltaPoints: number, reasonText: string) => {
+  const handleApplyPoints = async (
+    unitPoints: number,
+    reasonText: string,
+    qty = 1,
+  ) => {
     if (!starModal) return;
     const { student, type } = starModal;
-    const actualDelta =
-      type === "plus" ? Math.abs(deltaPoints) : -Math.abs(deltaPoints);
+    const total = Math.abs(unitPoints) * qty;
+    const actualDelta = type === "plus" ? total : -total;
     const nextStars = (student.stars || 0) + actualDelta;
 
     try {
@@ -629,16 +701,16 @@ export default function AdminStudents({
       await updateDoc(doc(db, "students", student.id!), { stars: nextStars });
       await addDoc(collection(db, "activityLog"), {
         name: student.name,
-        label: `${actualDelta > 0 ? "Cộng điểm ⭐" : "Trừ điểm ⭐"} (${reasonText})`,
+        label: `${actualDelta > 0 ? "Cộng điểm ⭐" : "Trừ điểm ⭐"} (${reasonText}${
+          qty > 1 ? ` x${qty}` : ""
+        })`,
         delta: actualDelta,
         createdAt: serverTimestamp(),
       });
       toast.success(
         `Đã ${actualDelta > 0 ? "cộng" : "trừ"} ${Math.abs(actualDelta)} điểm cho ${student.name}!`,
       );
-      setStarModal(null);
-      setCustomReason("");
-      setCustomPoints(1);
+      closeStarModal();
     } catch {
       toast.error("Lỗi khi cập nhật điểm sao");
     }
@@ -734,7 +806,7 @@ export default function AdminStudents({
             Xóa nhanh
           </button>
 
-          {/* Nút Nhập danh sách excel (đã chuẩn mẫu của bạn) */}
+          {/* Nút Nhập danh sách excel */}
           <button
             type="button"
             onClick={() => setExcelModalOpen(true)}
@@ -832,7 +904,6 @@ export default function AdminStudents({
 
       {/* Tìm kiếm */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        {/* Ô tìm kiếm chiếm 2 cột trên màn hình vừa/lớn */}
         <div className="relative sm:col-span-2">
           <input
             type="text"
@@ -843,7 +914,6 @@ export default function AdminStudents({
           />
         </div>
 
-        {/* Ô lọc theo tổ (chiếm 1 cột) */}
         <div>
           <select
             className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
@@ -859,7 +929,6 @@ export default function AdminStudents({
           </select>
         </div>
 
-        {/* Ô sắp xếp (chiếm 1 cột) */}
         <div>
           <select
             className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
@@ -1057,6 +1126,13 @@ export default function AdminStudents({
                   </button>
                 </div>
 
+                {/* Hiện lý do điểm danh (nếu có) */}
+                {s.status && s.status !== "present" && s.reason && (
+                  <p className="text-[11px] text-slate-500 italic m-0 px-1">
+                    Lý do: {s.reason}
+                  </p>
+                )}
+
                 <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
                   <button
                     onClick={() => setEditItem(s)}
@@ -1102,7 +1178,6 @@ export default function AdminStudents({
         )}
       </div>
 
-      {/* Modal Thêm Học Sinh */}
       {/* POPUP THÊM HỌC SINH MỚI */}
       {addModalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
@@ -1318,7 +1393,6 @@ export default function AdminStudents({
       {deleteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full p-6 flex flex-col max-h-[85vh] animate-fadeIn">
-            {/* Header Modal */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-800 m-0">
                 Xóa học sinh
@@ -1332,7 +1406,6 @@ export default function AdminStudents({
               </button>
             </div>
 
-            {/* Thanh tìm kiếm và nút Chọn tất cả */}
             <div className="flex items-center gap-2 mb-3">
               <div className="relative flex-1">
                 <input
@@ -1357,14 +1430,12 @@ export default function AdminStudents({
                   );
 
                   if (allSelected) {
-                    // Bỏ chọn các item đang hiển thị trong kết quả lọc
                     setSelectedStudentIds(
                       selectedStudentIds.filter(
                         (id) => !filteredIds.includes(id),
                       ),
                     );
                   } else {
-                    // Chọn tất cả item đang hiển thị trong kết quả lọc
                     const newSet = new Set([
                       ...selectedStudentIds,
                       ...filteredIds,
@@ -1389,7 +1460,6 @@ export default function AdminStudents({
               </button>
             </div>
 
-            {/* Danh sách học sinh dạng cuộn */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 my-1 max-h-87.5">
               {students.length === 0 ? (
                 <p className="text-center text-slate-400 py-6 text-sm">
@@ -1451,7 +1521,6 @@ export default function AdminStudents({
               )}
             </div>
 
-            {/* Footer Modal */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
               <span className="text-xs font-semibold text-slate-500">
                 Đã chọn:{" "}
@@ -1593,9 +1662,10 @@ export default function AdminStudents({
       )}
 
       {/* Modal Cộng/Trừ Điểm Sao */}
+      {/* Modal Cộng/Trừ Điểm Sao */}
       {starModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
-          <div className="bg-white p-6 rounded-3xl  w-full max-w-lg border border-slate-100 shadow-2xl space-y-6">
+          <div className="bg-white p-6 rounded-3xl w-full max-w-lg border border-slate-100 shadow-2xl space-y-6">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
               <h3
                 className={`text-base font-extrabold m-0 ${starModal.type === "plus" ? "text-emerald-700" : "text-rose-700"}`}
@@ -1604,52 +1674,152 @@ export default function AdminStudents({
                 {starModal.student.name.toUpperCase()}
               </h3>
               <button
-                onClick={() => setStarModal(null)}
+                onClick={closeStarModal}
                 className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
-              {criteriaList
-                .filter((item) =>
-                  starModal.type === "plus"
-                    ? item.type === "pos"
-                    : item.type === "neg",
-                )
-                .map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() =>
-                      handleApplyPoints(Math.abs(item.points), item.label)
-                    }
-                    className={`p-3 rounded-3xl border text-left flex flex-col justify-between transition hover:scale-[1.02] ${
-                      starModal.type === "plus"
-                        ? "bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50 text-emerald-900"
-                        : "bg-rose-50/40 border-rose-100 hover:bg-rose-50 text-rose-900"
-                    }`}
-                  >
-                    <div className="flex items-start gap-1.5">
-                      <span className="text-sm shrink-0">{item.icon}</span>
-                      <span className="text-xs font-bold leading-snug">
-                        {item.label}
-                      </span>
-                    </div>
-                    <span
-                      className={`text-xs font-extrabold mt-2 ${
+            {!selectedCriteria ? (
+              /* Bước 1: chọn tiêu chí */
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+                {criteriaList
+                  .filter((item) =>
+                    starModal.type === "plus"
+                      ? item.type === "pos"
+                      : item.type === "neg",
+                  )
+                  .map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setSelectedCriteria(item);
+                        setQuantity(1);
+                      }}
+                      className={`p-3 rounded-3xl border text-left flex flex-col justify-between transition hover:scale-[1.02] ${
                         starModal.type === "plus"
-                          ? "text-emerald-600"
-                          : "text-rose-600"
+                          ? "bg-emerald-50/40 border-emerald-100 hover:bg-emerald-50 text-emerald-900"
+                          : "bg-rose-50/40 border-rose-100 hover:bg-rose-50 text-rose-900"
                       }`}
                     >
-                      {starModal.type === "plus"
-                        ? `+${Math.abs(item.points)} điểm`
-                        : `-${Math.abs(item.points)} điểm`}
-                    </span>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-sm shrink-0">{item.icon}</span>
+                        <span className="text-xs font-bold leading-snug">
+                          {item.label}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-xs font-extrabold mt-2 ${
+                          starModal.type === "plus"
+                            ? "text-emerald-600"
+                            : "text-rose-600"
+                        }`}
+                      >
+                        {starModal.type === "plus"
+                          ? `+${Math.abs(item.points)} điểm`
+                          : `-${Math.abs(item.points)} điểm`}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            ) : (
+              /* Bước 2: nhập số lượng */
+              <div className="space-y-4">
+                <div
+                  className={`flex items-center gap-2 p-3 rounded-3xl border ${
+                    starModal.type === "plus"
+                      ? "bg-emerald-50/40 border-emerald-100 text-emerald-900"
+                      : "bg-rose-50/40 border-rose-100 text-rose-900"
+                  }`}
+                >
+                  <span className="text-lg shrink-0">
+                    {selectedCriteria.icon}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold m-0">
+                      {selectedCriteria.label}
+                    </p>
+                    <p className="text-xs m-0 opacity-70">
+                      {starModal.type === "plus" ? "+" : "-"}
+                      {Math.abs(selectedCriteria.points)} điểm / lần
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                    Số lượng (số lần)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      className="w-10 h-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-lg hover:bg-slate-200 transition-all flex items-center justify-center"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={quantity}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10);
+                        setQuantity(
+                          isNaN(n) ? 1 : Math.min(99, Math.max(1, n)),
+                        );
+                      }}
+                      className="flex-1 h-10 px-3.5 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm font-bold focus:border-amber-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                      className="w-10 h-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-lg hover:bg-slate-200 transition-all flex items-center justify-center"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <p
+                  className={`text-sm font-extrabold text-center m-0 ${
+                    starModal.type === "plus"
+                      ? "text-emerald-600"
+                      : "text-rose-600"
+                  }`}
+                >
+                  Tổng: {starModal.type === "plus" ? "+" : "-"}
+                  {Math.abs(selectedCriteria.points) * quantity} điểm
+                </p>
+
+                <div className="flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCriteria(null);
+                      setQuantity(1);
+                    }}
+                    className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    Quay lại
                   </button>
-                ))}
-            </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleApplyPoints(
+                        Math.abs(selectedCriteria.points),
+                        selectedCriteria.label,
+                        quantity,
+                      )
+                    }
+                    className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    Xác nhận
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1679,16 +1849,24 @@ export default function AdminStudents({
                 studentLogs.map((log, idx) => (
                   <div
                     key={idx}
-                    className="flex justify-between items-center border-b border-slate-100 pb-2 last:border-0"
+                    className="flex justify-between items-center gap-2 border-b border-slate-100 pb-2 last:border-0"
                   >
                     <span className="text-slate-700 font-medium">
                       {log.label}
                     </span>
-                    <span
-                      className={`font-bold ${log.delta > 0 ? "text-emerald-600" : "text-rose-600"}`}
-                    >
-                      {log.delta > 0 ? `+${log.delta}` : log.delta} ⭐
-                    </span>
+                    {log.type === "attendance" ? (
+                      <span className="font-bold text-slate-500 whitespace-nowrap">
+                        {log.status && STATUS_META[log.status]?.label}
+                      </span>
+                    ) : (
+                      <span
+                        className={`font-bold whitespace-nowrap ${
+                          log.delta > 0 ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {log.delta > 0 ? `+${log.delta}` : log.delta} ⭐
+                      </span>
+                    )}
                   </div>
                 ))
               )}
@@ -1762,6 +1940,20 @@ export default function AdminStudents({
                   {infoModalStudent.position || "Chưa cập nhật"}
                 </span>
               </div>
+
+              {/* Điểm danh hôm nay + lý do */}
+              {infoModalStudent.status &&
+                infoModalStudent.status !== "present" && (
+                  <div className="flex justify-between py-1 border-t border-slate-100">
+                    <span className="text-slate-500">Điểm danh hôm nay</span>
+                    <span className="font-bold text-slate-800 text-right">
+                      {STATUS_META[infoModalStudent.status]?.label}
+                      {infoModalStudent.reason
+                        ? ` - ${infoModalStudent.reason}`
+                        : ""}
+                    </span>
+                  </div>
+                )}
             </div>
             <button
               onClick={() => setInfoModalStudent(null)}
@@ -1776,29 +1968,81 @@ export default function AdminStudents({
       {/* Popup Điểm danh */}
       {attendanceModalStudent && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
-          <div className="bg-white p-6 rounded-3xl  w-full max-w-xs border border-[#EFE8D8] shadow-xl space-y-4 text-center">
+          <div className="bg-white p-6 rounded-3xl w-full max-w-xs border border-[#EFE8D8] shadow-xl space-y-4 text-center">
             <h3 className="text-sm font-bold text-slate-800 m-0">
               Điểm danh: {attendanceModalStudent.name}
             </h3>
+
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(STATUS_META).map(([key, m]) => (
-                <button
-                  key={key}
-                  onClick={() =>
-                    handleSetStatus(attendanceModalStudent.id!, key)
-                  }
-                  className={`py-2.5 px-3 rounded-xl font-bold text-xs border flex items-center justify-center gap-1.5 transition ${
-                    attendanceModalStudent.status === key
-                      ? m.active
-                      : "bg-white text-slate-700 border-slate-200 hover:border-amber-300"
-                  }`}
-                >
-                  {m.icon} {m.label}
-                </button>
-              ))}
+              {Object.entries(STATUS_META).map(([key, m]) => {
+                const isActive =
+                  (pendingStatus ?? attendanceModalStudent.status) === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      if (key === "present") {
+                        handleSetStatus(attendanceModalStudent, "present", "");
+                      } else {
+                        setPendingStatus(key);
+                        setAttReason(
+                          attendanceModalStudent.status === key
+                            ? attendanceModalStudent.reason || ""
+                            : "",
+                        );
+                      }
+                    }}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border flex items-center justify-center gap-1.5 transition ${
+                      isActive
+                        ? m.active
+                        : "bg-white text-slate-700 border-slate-200 hover:border-amber-300"
+                    }`}
+                  >
+                    {m.icon} {m.label}
+                  </button>
+                );
+              })}
             </div>
+
+            {pendingStatus && (
+              <div className="space-y-2 text-left">
+                <label className="text-xs font-semibold text-slate-600">
+                  Lý do {STATUS_META[pendingStatus].label.toLowerCase()}
+                </label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={attReason}
+                  onChange={(e) => setAttReason(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && attReason.trim())
+                      handleSetStatus(
+                        attendanceModalStudent,
+                        pendingStatus,
+                        attReason.trim(),
+                      );
+                  }}
+                  placeholder="Nhập lý do..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
+                />
+                <button
+                  onClick={() =>
+                    handleSetStatus(
+                      attendanceModalStudent,
+                      pendingStatus,
+                      attReason.trim(),
+                    )
+                  }
+                  disabled={!attReason.trim()}
+                  className="w-full py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition"
+                >
+                  Lưu điểm danh
+                </button>
+              </div>
+            )}
+
             <button
-              onClick={() => setAttendanceModalStudent(null)}
+              onClick={closeAttendanceModal}
               className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition"
             >
               Đóng

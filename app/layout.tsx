@@ -15,7 +15,6 @@ const beVietnamPro = Be_Vietnam_Pro({
 
 const baloo2 = Baloo_2({
   subsets: ["latin", "vietnamese"],
-  weight: ["500", "700", "800"],
   variable: "--font-baloo-2",
   display: "swap",
 });
