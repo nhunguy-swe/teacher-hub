@@ -228,6 +228,7 @@ export default function AdminCriteria() {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingEdit) return;
     if (!editingItem || !editLabel.trim()) return;
     setSavingEdit(true);
     try {
@@ -452,7 +453,7 @@ export default function AdminCriteria() {
             <button
               type="button"
               onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-              className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm flex items-center justify-between"
+              className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm flex items-center justify-between cursor-pointer"
             >
               <span className="flex items-center gap-1.5 truncate">
                 {type === "pos" ? "🌟 Cộng điểm" : "⚠️ Trừ điểm"}
@@ -480,10 +481,10 @@ export default function AdminCriteria() {
                     setType("pos");
                     setShowTypeDropdown(false);
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+                  className={`w-full px-3 py-2 text-left text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     type === "pos"
                       ? "bg-amber-50 text-amber-700 font-bold"
-                      : "hover:bg-slate-50 text-slate-700"
+                      : "bg-white hover:bg-slate-50 text-slate-700"
                   }`}
                 >
                   🌟 Cộng điểm
@@ -494,10 +495,10 @@ export default function AdminCriteria() {
                     setType("neg");
                     setShowTypeDropdown(false);
                   }}
-                  className={`w-full px-3 py-2 text-left text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+                  className={`w-full px-3 py-2 text-left text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     type === "neg"
                       ? "bg-amber-50 text-amber-700 font-bold"
-                      : "hover:bg-slate-50 text-slate-700"
+                      : "bg-white hover:bg-slate-50 text-slate-700"
                   }`}
                 >
                   ⚠️ Trừ điểm
@@ -519,7 +520,7 @@ export default function AdminCriteria() {
             <button
               type="button"
               onClick={() => setShowIconDropdown(!showIconDropdown)}
-              className="absolute right-2 text-slate-400 hover:text-slate-600 p-1"
+              className="absolute right-2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
             >
               <svg
                 className="w-4 h-4"
@@ -546,7 +547,7 @@ export default function AdminCriteria() {
                       setIcon(ic);
                       setShowIconDropdown(false);
                     }}
-                    className="h-8 flex items-center justify-center text-lg hover:bg-amber-50 rounded-lg transition-all"
+                    className="h-8 flex items-center justify-center text-lg hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
                   >
                     {ic}
                   </button>
@@ -798,19 +799,17 @@ export default function AdminCriteria() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setEditingItem(null)}
-                  disabled={savingEdit}
-                  className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3.5 py-2 text-xs font-bold bg-slate-50! text-slate-700! border border-slate-200 rounded-xl opacity-100! hover:bg-slate-200! hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                 >
-                  Hủy
+                  Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  disabled={savingEdit}
-                  className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3.5 py-2 text-xs font-bold bg-amber-50! text-amber-700! border border-amber-200 rounded-xl opacity-100! hover:bg-amber-600! hover:text-white! hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                 >
                   {savingEdit ? "Đang lưu..." : "Lưu thay đổi"}
                 </button>

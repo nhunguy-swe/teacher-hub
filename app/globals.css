@@ -584,7 +584,8 @@ textarea {
 
 /* Navbar ở dark mode */
 .dark nav {
-  background: rgba(33, 58, 48, .92); /* --blackboard-dark */
+  background: rgba(33, 58, 48, .92);
+  /* --blackboard-dark */
 }
 
 /* Hero luôn là bảng đen: ghim chữ sáng, không theo biến --chalk của dark mode */
@@ -607,7 +608,7 @@ textarea {
 .footer-col h6,
 .tab-btn.active,
 thead th,
-form button,
+form button:not([class*="text-"]),
 .testi:nth-child(3) {
   color: #f5f1e8;
 }
@@ -636,7 +637,7 @@ form button,
 .dark .quick-connect a,
 .dark .footer-col h6,
 .dark .tab-btn.active,
-.dark form button,
+.dark form button:not([class*="text-"]),
 .dark .testi:nth-child(3) {
   color: #f5f1e8;
 }
@@ -646,11 +647,13 @@ form button,
 }
 
 .dark body {
-  background: #0f172a; /* hoặc màu bạn muốn */
+  background: #0f172a;
+  /* hoặc màu bạn muốn */
 }
 
 .dark .tear {
-  background: #0f172a; /* cùng màu với body */
+  background: #0f172a;
+  /* cùng màu với body */
 }
 
 .dark .announce {
