@@ -1162,8 +1162,8 @@ export default function AdminStudents({
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
                           studentGender === "Nữ"
-                            ? "bg-pink-50 border-pink-200 text-pink-700"
-                            : "bg-indigo-50 border-indigo-200 text-indigo-700"
+                            ? "bg-pink-50 border-pink-200 text-pink-700 dark:bg-pink-950/50 dark:border-pink-800 dark:text-pink-300"
+                            : "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300"
                         }`}
                       >
                         {studentGender}
