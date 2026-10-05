@@ -83,7 +83,9 @@ const POSITIONS = [
   "Lớp trưởng",
   "Lớp phó học tập",
   "Lớp phó kỷ luật",
+  "Lớp phó văn thể mỹ",
   "Tổ trưởng",
+  "Tổ phó",
   "Thành viên",
 ];
 
