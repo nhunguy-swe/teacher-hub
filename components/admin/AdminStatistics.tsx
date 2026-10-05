@@ -25,12 +25,14 @@ import {
   getSunday,
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
+import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
 
 interface StudentItem {
   id: string;
   name: string;
   group: string;
   stars: number;
+  position?: string;
   status?: "present" | "excused" | "absent" | "late";
   avatarUrl?: string;
   weeklyScore?: number;
@@ -837,7 +839,7 @@ export default function AdminStatistics({
     [students, weeklyDeltaMap],
   );
   const topThreeStudents = rankedStudents.slice(0, 3);
-  const remainingStudents = rankedStudents.slice(3);
+  const remainingStudents = rankedStudents;
 
   // Lọc task theo ngày đang được chọn trên lịch
   const selectedDateKey = formatDateKey(selectedDate);
@@ -1947,7 +1949,7 @@ export default function AdminStatistics({
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-xs w-7 text-center font-extrabold shrink-0 text-slate-600">
-                          #{i + 4}
+                          #{i + 1}
                         </span>
                         <div className="w-8 h-8 rounded-xl bg-amber-100/80 text-amber-800 font-extrabold flex items-center justify-center text-xs shrink-0 shadow-2xs border border-amber-200/50 overflow-hidden">
                           {s.avatarUrl ? (
@@ -1969,17 +1971,27 @@ export default function AdminStatistics({
                             {s.name}
                           </p>
                           {/* 👇 Thay dòng "Tổ x" chữ thường bằng badge bo tròn có màu */}
-                          <span
-                            className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              GROUP_BADGE_STYLES[s.group]?.badgeBg ||
-                              "bg-slate-50"
-                            } ${GROUP_BADGE_STYLES[s.group]?.badgeText || "text-slate-600"} ${
-                              GROUP_BADGE_STYLES[s.group]?.badgeBorder ||
-                              "border-slate-200"
-                            }`}
-                          >
-                            {s.group || "Tổ 1"}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                GROUP_BADGE_STYLES[s.group]?.badgeBg ||
+                                "bg-slate-50"
+                              } ${GROUP_BADGE_STYLES[s.group]?.badgeText || "text-slate-600"} ${
+                                GROUP_BADGE_STYLES[s.group]?.badgeBorder ||
+                                "border-slate-200"
+                              }`}
+                            >
+                              {s.group || "Tổ 1"}
+                            </span>
+                            {s.position &&
+                              !HIDDEN_POSITION_TAGS.includes(s.position) && (
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${getPositionTagStyle(s.position)}`}
+                                >
+                                  {s.position}
+                                </span>
+                              )}
+                          </div>
                         </div>
                       </div>
                       <div className="shrink-0 pl-2 text-right">

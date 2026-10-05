@@ -14,12 +14,14 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
+import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
 
 interface StudentItem {
   id: string;
   name: string;
   group: string;
   stars: number;
+  position?: string;
   avatarUrl?: string;
 }
 
@@ -925,6 +927,15 @@ export default function AdminHonor() {
   };
 
   const ranked = [...students].sort((a, b) => (b.stars || 0) - (a.stars || 0));
+
+  const positionById = useMemo(() => {
+    const map: Record<string, string> = {};
+    students.forEach((s) => {
+      if (s.position) map[s.id] = s.position;
+    });
+    return map;
+  }, [students]);
+
   const filteredRanked = ranked.filter((s) =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
@@ -1220,12 +1231,21 @@ export default function AdminHonor() {
                       <span className="text-xs font-semibold text-slate-700 flex-1 truncate">
                         {s.name}
                       </span>
+                      {positionById[s.id] &&
+                        !HIDDEN_POSITION_TAGS.includes(positionById[s.id]) && (
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap ${getPositionTagStyle(positionById[s.id])}`}
+                          >
+                            {positionById[s.id]}
+                          </span>
+                        )}
                       <span
                         className="text-[10px] font-bold px-2.5 py-1 rounded-full"
                         style={{ background: tag.bg, color: tag.fg }}
                       >
                         {s.group}
                       </span>
+
                       <span
                         className={`text-[11px] font-bold w-14 text-right ${
                           s.delta > 0
@@ -1418,6 +1438,14 @@ export default function AdminHonor() {
                       <span className="text-xs font-semibold text-slate-700 flex-1 truncate">
                         {s.name}
                       </span>
+                      {s.position &&
+                        !HIDDEN_POSITION_TAGS.includes(s.position) && (
+                          <span
+                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap ${getPositionTagStyle(s.position)}`}
+                          >
+                            {s.position}
+                          </span>
+                        )}
                       <span
                         className="text-[10px] font-bold px-2.5 py-1 rounded-full"
                         style={{ background: tag.bg, color: tag.fg }}

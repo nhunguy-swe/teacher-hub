@@ -24,6 +24,7 @@ import {
   getSunday,
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
+import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
 
 interface StudentItem {
   id?: string;
@@ -1152,7 +1153,7 @@ export default function AdminStudents({
                     <h4 className="font-extrabold text-slate-800 text-base m-0">
                       {s.name}
                     </h4>
-                    <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <div className="flex items-center justify-center flex-wrap gap-1.5 mt-1">
                       <span
                         className={`px-2.5 py-0.5 ${groupStyle.badgeBg} border ${groupStyle.badgeBorder} rounded-full text-[11px] font-bold ${groupStyle.badgeText}`}
                       >
@@ -1167,6 +1168,14 @@ export default function AdminStudents({
                       >
                         {studentGender}
                       </span>
+                      {s.position &&
+                        !HIDDEN_POSITION_TAGS.includes(s.position) && (
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap ${getPositionTagStyle(s.position)}`}
+                          >
+                            {s.position}
+                          </span>
+                        )}
                     </div>
                   </div>
                 </div>
