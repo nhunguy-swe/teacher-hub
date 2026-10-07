@@ -79,11 +79,6 @@ export default function AdminSeatingChart() {
             setTeacherBoardText(data.teacherBoardText);
           }
 
-          // const titles: string[] = Array.isArray(data.groupTitles)
-          //   ? data.groupTitles.slice(0, TOTAL_GROUPS)
-          //   : groupTitles;
-          // setGroupTitles(titles);
-
           const studentById = new Map(studentList.map((s) => [s.id, s]));
           const cleanedSeats: Record<string, string> = {};
           const used = new Set<string>();
