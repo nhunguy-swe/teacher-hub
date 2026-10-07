@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -158,6 +158,71 @@ const removeAccents = (str: string) =>
     .replace(/Đ/g, "D")
     .toLowerCase();
 
+// Tìm kiếm thông minh: Hỗ trợ tìm không dấu theo Tên, Chức vụ và SĐT phụ huynh
+const matchStudent = (s: StudentItem, keyword: string) => {
+  const kw = removeAccents(keyword.trim());
+  if (!kw) return true;
+
+  const PLACEHOLDER = "Chưa cập nhật";
+  const clean = (v?: string) => (v && v !== PLACEHOLDER ? v : "");
+
+  // Lấy ra các trường thông tin cần quét tìm kiếm và chuẩn hóa không dấu
+  const nameNorm = removeAccents(s.name);
+  const phoneNorm = removeAccents(clean(s.parentPhone));
+
+  // Tách tên học sinh thành các từ độc lập để so khớp chính xác từng từ
+  const nameWords = nameNorm.split(/\s+/);
+  const tokens = kw.split(/\s+/).filter(Boolean);
+
+  // Kiểm tra từng từ khóa (token) người dùng gõ vào:
+  // 1. Phải khớp với một từ độc lập trong tên (VD: gõ "an", "dung"...), HOẶC
+  // . Khớp hoặc chứa trong Số điện thoại phụ huynh (VD: gõ "0912"...)
+  return tokens.every((token) => {
+    const matchName = nameWords.some((word) => word === token);
+    const matchPhone = phoneNorm.includes(token);
+
+    return matchName || matchPhone;
+  });
+};
+
+// Tô sáng chuẩn xác: Chỉ tô đúng từ nguyên vẹn khớp với từ khóa, tuyệt đối không tô lẹm bậy bạ
+const HighlightText = ({
+  text,
+  keyword,
+}: {
+  text: string;
+  keyword: string;
+}) => {
+  const tokens = removeAccents(keyword.trim()).split(/\s+/).filter(Boolean);
+  const nfc = text.normalize("NFC");
+  if (tokens.length === 0) return <>{nfc}</>;
+
+  // Tách tên thành các từ và giữ nguyên khoảng trắng giữa các từ
+  const parts = nfc.split(/(\s+)/);
+
+  return (
+    <>
+      {parts.map((part, idx) => {
+        const plainPart = removeAccents(part).toLowerCase();
+        // Kiểm tra xem từ này (sau khi bỏ dấu) có khớp chính xác với từ khóa không
+        const isMatched = tokens.some((t) => plainPart === t);
+
+        if (isMatched && part.trim().length > 0) {
+          return (
+            <mark
+              key={idx}
+              className="bg-amber-200 text-slate-900 rounded px-0.5"
+            >
+              {part}
+            </mark>
+          );
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </>
+  );
+};
+
 // Chuẩn hóa giới tính về đúng "Nam"/"Nữ" bất kể dữ liệu gốc viết hoa/thường khác nhau.
 const normalizeGenderLabel = (gender?: string) => {
   if (!gender) return "Nam";
@@ -267,21 +332,29 @@ export default function AdminStudents({
     { name: string; delta: number; createdAt?: { toDate: () => Date } | null }[]
   >([]);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const deferredSearch = useDeferredValue(search); // gõ mượt khi danh sách dài
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (
+        e.key === "/" &&
+        tag !== "INPUT" &&
+        tag !== "TEXTAREA" &&
+        tag !== "SELECT"
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // State điểm danh có lý do
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [attReason, setAttReason] = useState("");
-
-  useEffect(() => {
-    const q = query(collection(db, "students"), orderBy("name", "asc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const studentList = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as StudentItem[];
-      setStudents(studentList);
-    });
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     const q = query(
@@ -354,27 +427,25 @@ export default function AdminStudents({
       (s) =>
         (groupFilter === "all" ||
           normalizeGroupName(s.group) === groupFilter) &&
-        s.name.toLowerCase().includes(search.toLowerCase().trim()),
+        matchStudent(s, deferredSearch),
     );
 
     result.sort((a, b) => {
-      if (sortBy === "name-asc") {
-        return a.name.localeCompare(b.name);
-      } else if (sortBy === "name-desc") {
-        return b.name.localeCompare(a.name);
-      } else if (sortBy === "group") {
-        const groupA = normalizeGroupName(a.group);
-        const groupB = normalizeGroupName(b.group);
-        if (groupA !== groupB) return groupA.localeCompare(groupB);
-        return a.name.localeCompare(b.name);
-      } else if (sortBy === "stars-desc") {
-        return (b.stars || 0) - (a.stars || 0);
+      if (sortBy === "name-asc") return a.name.localeCompare(b.name, "vi");
+      if (sortBy === "name-desc") return b.name.localeCompare(a.name, "vi");
+      if (sortBy === "group") {
+        const ga = normalizeGroupName(a.group);
+        const gb = normalizeGroupName(b.group);
+        return ga !== gb
+          ? ga.localeCompare(gb)
+          : a.name.localeCompare(b.name, "vi");
       }
+      if (sortBy === "stars-desc") return (b.stars || 0) - (a.stars || 0);
       return 0;
     });
 
     return result;
-  }, [students, search, groupFilter, sortBy]);
+  }, [students, deferredSearch, groupFilter, sortBy]);
 
   const filteredCriteria = useMemo(() => {
     if (!starModal) return [];
@@ -401,26 +472,6 @@ export default function AdminStudents({
     });
     return c;
   }, [students]);
-
-  // Tạo hàm tải dữ liệu từ Firestore
-  const fetchStudentsData = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "students"));
-      const list = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as StudentItem[];
-      setStudents(list);
-    } catch (error) {
-      console.error("Lỗi tải danh sách:", error);
-    }
-  };
-
-  // Gọi nó trong useEffect khi component vừa load lên
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchStudentsData();
-  }, []);
 
   const handleAddStudentFull = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -475,7 +526,6 @@ export default function AdminStudents({
       toast.success(`Đã xóa ${count} học sinh khỏi hệ thống!`);
       setDeleteModalOpen(false);
       setSelectedStudentIds([]);
-      fetchStudentsData();
     } catch (error) {
       console.error("Lỗi khi xóa hàng loạt:", error);
       toast.error("Có lỗi xảy ra khi xóa học sinh.");
@@ -607,8 +657,6 @@ export default function AdminStudents({
 
       toast.success("Cập nhật thành công!");
       setEditItem(null);
-
-      fetchStudentsData();
 
       if (onUpdated) {
         onUpdated();
@@ -1067,12 +1115,31 @@ export default function AdminStudents({
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="relative sm:col-span-2">
           <input
+            ref={searchInputRef}
             type="text"
-            placeholder="Tìm kiếm học sinh..."
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500 font-medium transition-colors"
+            placeholder="Tìm theo tên, tổ, chức vụ, SĐT..."
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-16 py-2.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500 font-medium transition-colors"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setSearch("")}
           />
+          {search && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400">
+                {filtered.length}/{students.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  searchInputRef.current?.focus();
+                }}
+                className="w-5 h-5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 text-[10px] font-bold flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
         </div>
 
         <div>
@@ -1108,7 +1175,23 @@ export default function AdminStudents({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.length === 0 ? (
           <p className="text-xs text-slate-400 text-center py-6 sm:col-span-2 lg:col-span-3">
-            Không tìm thấy học sinh phù hợp.
+            {search ? (
+              <>
+                Không tìm thấy &quot;<strong>{search}</strong>&quot;.{" "}
+                <button
+                  type="button"
+                  className="text-amber-600 font-bold underline cursor-pointer"
+                  onClick={() => {
+                    setSearch("");
+                    setGroupFilter("all");
+                  }}
+                >
+                  Xóa bộ lọc
+                </button>
+              </>
+            ) : (
+              "Chưa có học sinh nào."
+            )}
           </p>
         ) : (
           filtered.map((s) => {
@@ -1151,7 +1234,7 @@ export default function AdminStudents({
                   </div>
                   <div>
                     <h4 className="font-extrabold text-slate-800 text-base m-0">
-                      {s.name}
+                      <HighlightText text={s.name} keyword={search} />
                     </h4>
                     <div className="flex items-center justify-center flex-wrap gap-1.5 mt-1">
                       <span
@@ -1695,6 +1778,19 @@ export default function AdminStudents({
 
             <div className="flex items-center gap-2 mb-3">
               <div className="relative flex-1">
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m21 21-4.3-4.3" />
+                </svg>
                 <input
                   type="text"
                   placeholder="Tìm kiếm học sinh theo tên..."
@@ -1707,9 +1803,7 @@ export default function AdminStudents({
                 type="button"
                 onClick={() => {
                   const filtered = students.filter((s) =>
-                    s.name
-                      .toLowerCase()
-                      .includes((deleteSearchQuery || "").toLowerCase()),
+                    matchStudent(s, deleteSearchQuery),
                   );
                   const filteredIds = filtered.map((s) => s.id!);
                   const allSelected = filteredIds.every((id) =>
@@ -1754,11 +1848,7 @@ export default function AdminStudents({
                 </p>
               ) : (
                 students
-                  .filter((student) =>
-                    student.name
-                      .toLowerCase()
-                      .includes((deleteSearchQuery || "").toLowerCase()),
-                  )
+                  .filter((student) => matchStudent(student, deleteSearchQuery))
                   .map((student) => {
                     const isSelected = selectedStudentIds.includes(student.id!);
                     return (
