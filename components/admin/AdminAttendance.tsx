@@ -476,37 +476,87 @@ export default function AdminAttendance() {
     processAggregatedData,
   ]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     try {
-      let csvContent = "\ufeff";
-      let fileName = "";
+      const XLSX = await import("xlsx");
+
+      let rows: (string | number)[][];
+      let cols: { wch: number }[];
+      let sheetName: string;
+      let fileName: string;
 
       if (reportType === "daily") {
-        csvContent += `STT,Họ và Tên,Tổ,Ngày,Trạng thái,Lý do\n`;
-        dailyReportData.forEach((item, index) => {
-          const label = STATUS_META[item.status]?.label || item.status;
-          const reason = (item.reason || "").replace(/"/g, '""');
-          csvContent += `${index + 1},"${item.name}","${item.group || ""}","${item.date}","${label}","${reason}"\n`;
-        });
-        fileName = `Bao_Cao_Ngay_${selectedDate}.csv`;
+        rows = [
+          ["STT", "Họ và Tên", "Tổ", "Ngày", "Trạng thái", "Lý do"],
+          ...dailyReportData.map((item, index) => [
+            index + 1,
+            item.name,
+            item.group || "",
+            item.date,
+            STATUS_META[item.status]?.label || item.status,
+            item.reason || "",
+          ]),
+        ];
+        cols = [
+          { wch: 6 },
+          { wch: 28 },
+          { wch: 8 },
+          { wch: 12 },
+          { wch: 14 },
+          { wch: 36 },
+        ];
+        sheetName = "Báo cáo ngày";
+        fileName = `Bao_Cao_Ngay_${selectedDate}.xlsx`;
       } else {
-        csvContent += `STT,Họ và Tên,Tổ,Có mặt,Có phép,Vắng,Đi muộn,Tổng buổi\n`;
-        aggregatedReportData.forEach((item, index) => {
-          const total = item.present + item.excused + item.absent + item.late;
-          csvContent += `${index + 1},"${item.name}","${item.group || ""}",${item.present},${item.excused},${item.absent},${item.late},${total}\n`;
-        });
-        fileName = `Bao_Cao_${reportType.toUpperCase()}_${reportType === "weekly" ? selectedWeek : selectedDate.slice(0, 7)}.csv`;
+        rows = [
+          [
+            "STT",
+            "Họ và Tên",
+            "Tổ",
+            "Có mặt",
+            "Có phép",
+            "Vắng",
+            "Đi muộn",
+            "Tổng buổi",
+          ],
+          ...aggregatedReportData.map((item, index) => [
+            index + 1,
+            item.name,
+            item.group || "",
+            item.present,
+            item.excused,
+            item.absent,
+            item.late,
+            item.present + item.excused + item.absent + item.late,
+          ]),
+        ];
+        cols = [
+          { wch: 6 },
+          { wch: 28 },
+          { wch: 8 },
+          { wch: 10 },
+          { wch: 10 },
+          { wch: 10 },
+          { wch: 10 },
+          { wch: 12 },
+        ];
+        const names = {
+          weekly: "tuần",
+          monthly: "tháng",
+          yearly: "năm",
+        } as const;
+        sheetName = `Báo cáo ${names[reportType as keyof typeof names]}`;
+        fileName = `Bao_Cao_${reportType.toUpperCase()}_${
+          reportType === "weekly" ? selectedWeek : selectedDate.slice(0, 7)
+        }.xlsx`;
       }
 
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = cols;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.writeFile(wb, fileName);
 
       toast.success("Đã xuất file báo cáo điểm danh!");
     } catch (error) {
