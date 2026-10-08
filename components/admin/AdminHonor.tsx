@@ -30,6 +30,7 @@ interface ActivityLogItem {
   name: string;
   label: string;
   delta: number;
+  type?: string;
   createdAt?: { toDate: () => Date } | null;
 }
 
@@ -61,8 +62,8 @@ interface AggregatedRow {
 
 interface CriteriaItem {
   id: string;
-  title: string;
-  type: "plus" | "minus";
+  label: string; // <-- trước là title
+  type: "pos" | "neg"; // <-- trước là "plus" | "minus"
   points: number;
 }
 
@@ -153,6 +154,13 @@ function monthKeyOf(iso: string) {
 function monthLabel(monthKey: string) {
   const [y, m] = monthKey.split("-");
   return `Tháng ${parseInt(m, 10)}/${y}`;
+}
+
+// "Cộng điểm ⭐ (Trả lời đúng x2)" -> "Trả lời đúng"
+function extractReason(label: string) {
+  const m = label.match(/\((.*)\)\s*$/);
+  const reason = m ? m[1] : label;
+  return reason.replace(/\s*x\d+$/i, "").trim();
 }
 
 function aggregateWeeks(weeks: WeeklyReportDoc[]): AggregatedRow[] {
@@ -791,6 +799,7 @@ export default function AdminHonor() {
         const aggregatedRows = monthAggregated;
 
         const periodLogs = activityLogs.filter((l) => {
+          if (l.type === "attendance") return false;
           if (!l.createdAt || typeof l.createdAt.toDate !== "function")
             return false;
           const d = l.createdAt.toDate();
@@ -819,13 +828,13 @@ export default function AdminHonor() {
         const seenCleanTitles = new Set<string>();
 
         criteriaList.forEach((c) => {
-          if (c?.title && typeof c.title === "string") {
-            const titleStr = c.title.trim();
+          if (c?.label && typeof c.label === "string") {
+            const titleStr = c.label.trim();
             if (!isPrivilegeLabel(titleStr)) {
               const cleaned = cleanTitle(titleStr);
               if (cleaned && !seenCleanTitles.has(cleaned)) {
                 seenCleanTitles.add(cleaned);
-                if (c.type === "minus") {
+                if (c.type === "neg") {
                   minusCriteria.push(titleStr);
                 } else {
                   plusCriteria.push(titleStr);
@@ -837,8 +846,8 @@ export default function AdminHonor() {
 
         periodLogs.forEach((l) => {
           if (l?.label && typeof l.label === "string") {
-            const labelStr = l.label.trim();
-            if (!isPrivilegeLabel(labelStr)) {
+            if (!isPrivilegeLabel(l.label)) {
+              const labelStr = extractReason(l.label);
               const cleaned = cleanTitle(labelStr);
               if (cleaned && !seenCleanTitles.has(cleaned)) {
                 seenCleanTitles.add(cleaned);
@@ -866,7 +875,8 @@ export default function AdminHonor() {
 
           plusCriteria.forEach((title) => {
             const matchedLogs = studentLogs.filter(
-              (l) => cleanTitle(l?.label || "") === cleanTitle(title),
+              (l) =>
+                cleanTitle(extractReason(l?.label || "")) === cleanTitle(title),
             );
             const totalScore = matchedLogs.reduce(
               (sum, curr) => sum + (curr.delta || 0),
@@ -882,7 +892,8 @@ export default function AdminHonor() {
 
           minusCriteria.forEach((title) => {
             const matchedLogs = studentLogs.filter(
-              (l) => cleanTitle(l?.label || "") === cleanTitle(title),
+              (l) =>
+                cleanTitle(extractReason(l?.label || "")) === cleanTitle(title),
             );
             const totalScore = matchedLogs.reduce(
               (sum, curr) => sum + (curr.delta || 0),
