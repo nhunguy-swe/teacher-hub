@@ -1268,7 +1268,7 @@ export default function AdminHonor() {
                       >
                         {s.delta > 0 ? `+${s.delta}` : s.delta}
                       </span>
-                      <span className="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full w-16 text-center">
+                      <span className="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-100 px-3 py-1 rounded-full min-w-20 text-center whitespace-nowrap shrink-0">
                         {s.weeklyScore} đ
                       </span>
                     </div>
@@ -1463,7 +1463,7 @@ export default function AdminHonor() {
                       >
                         {s.group}
                       </span>
-                      <span className="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-1 rounded-full w-16 text-center">
+                      <span className="text-xs font-extrabold text-amber-700 bg-amber-50 border border-amber-100 px-3 py-1 rounded-full min-w-20 text-center whitespace-nowrap shrink-0">
                         ⭐ {s.stars || 0}
                       </span>
                     </div>
