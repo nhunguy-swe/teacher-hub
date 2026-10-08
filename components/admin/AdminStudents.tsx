@@ -16,6 +16,7 @@ import {
   writeBatch,
   getDocs,
   setDoc,
+  increment,
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
 import {
@@ -43,6 +44,7 @@ interface StudentItem {
 }
 
 interface ActivityLogItem {
+  id?: string;
   name: string;
   label: string;
   delta: number;
@@ -373,7 +375,16 @@ export default function AdminStudents({
     return () => unsubscribe();
   }, []);
 
-  const weekMonday = useMemo(() => getMonday(new Date()), []);
+  // Cập nhật "hôm nay" mỗi phút để điểm tuần tự chuyển khi sang Thứ 2
+  const [today, setToday] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setToday(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const todayKey = today.toDateString();
+  const weekMonday = useMemo(() => getMonday(new Date(todayKey)), [todayKey]);
   const weekSunday = useMemo(() => getSunday(weekMonday), [weekMonday]);
   const weeklyDeltaMap = useMemo(
     () => buildWeeklyDeltaMap(weeklyActivityLogs, weekMonday, weekSunday),
@@ -415,7 +426,10 @@ export default function AdminStudents({
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const logs = snapshot.docs
-        .map((docSnap) => docSnap.data() as ActivityLogItem)
+        .map(
+          (docSnap) =>
+            ({ id: docSnap.id, ...docSnap.data() }) as ActivityLogItem,
+        )
         .filter((log) => log.name === historyModalStudent.name);
       setStudentLogs(logs);
     });
@@ -932,6 +946,29 @@ export default function AdminStudents({
       closeStarModal();
     } catch {
       toast.error("Lỗi khi cập nhật điểm sao");
+    }
+  };
+
+  const handleUndoLog = async (log: ActivityLogItem) => {
+    if (!log.id || !historyModalStudent?.id) return;
+    if (
+      !window.confirm(
+        `Hoàn tác "${log.label}" (${log.delta > 0 ? "+" : ""}${log.delta} điểm)?`,
+      )
+    )
+      return;
+
+    try {
+      // Trừ ngược số sao đã cộng/trừ
+      await updateDoc(doc(db, "students", historyModalStudent.id), {
+        stars: increment(-log.delta),
+      });
+      // Xóa dòng log -> Điểm tuần cũng tự đúng lại
+      await deleteDoc(doc(db, "activityLog", log.id));
+      toast.success("Đã hoàn tác điểm!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể hoàn tác, vui lòng thử lại!");
     }
   };
 
@@ -2291,13 +2328,22 @@ export default function AdminStudents({
                         {log.status && STATUS_META[log.status]?.label}
                       </span>
                     ) : (
-                      <span
-                        className={`font-bold whitespace-nowrap ${
-                          log.delta > 0 ? "text-emerald-600" : "text-rose-600"
-                        }`}
-                      >
-                        {log.delta > 0 ? `+${log.delta}` : log.delta} ⭐
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`font-bold whitespace-nowrap ${
+                            log.delta > 0 ? "text-emerald-600" : "text-rose-600"
+                          }`}
+                        >
+                          {log.delta > 0 ? `+${log.delta}` : log.delta} ⭐
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleUndoLog(log)}
+                          className="px-2 py-1 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition cursor-pointer"
+                        >
+                          Hoàn tác
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))
