@@ -329,6 +329,12 @@ export default function AdminStudents({
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
 
+  // State cho popup xác nhận hoàn tác điểm
+  const [confirmUndoLog, setConfirmUndoLog] = useState<ActivityLogItem | null>(
+    null,
+  );
+  const [undoing, setUndoing] = useState(false);
+
   // Toàn bộ activityLog (dùng để tính "Điểm tuần" 100đ/tuần cho mỗi thẻ học sinh)
   const [weeklyActivityLogs, setWeeklyActivityLogs] = useState<
     { name: string; delta: number; createdAt?: { toDate: () => Date } | null }[]
@@ -949,26 +955,24 @@ export default function AdminStudents({
     }
   };
 
-  const handleUndoLog = async (log: ActivityLogItem) => {
-    if (!log.id || !historyModalStudent?.id) return;
-    if (
-      !window.confirm(
-        `Hoàn tác "${log.label}" (${log.delta > 0 ? "+" : ""}${log.delta} điểm)?`,
-      )
-    )
-      return;
-
+  // Hoàn tác 1 lần cộng/trừ điểm (được gọi từ popup xác nhận)
+  const handleConfirmUndo = async () => {
+    if (!confirmUndoLog?.id || !historyModalStudent?.id) return;
+    setUndoing(true);
     try {
       // Trừ ngược số sao đã cộng/trừ
       await updateDoc(doc(db, "students", historyModalStudent.id), {
-        stars: increment(-log.delta),
+        stars: increment(-confirmUndoLog.delta),
       });
       // Xóa dòng log -> Điểm tuần cũng tự đúng lại
-      await deleteDoc(doc(db, "activityLog", log.id));
+      await deleteDoc(doc(db, "activityLog", confirmUndoLog.id));
       toast.success("Đã hoàn tác điểm!");
     } catch (error) {
       console.error(error);
       toast.error("Không thể hoàn tác, vui lòng thử lại!");
+    } finally {
+      setUndoing(false);
+      setConfirmUndoLog(null);
     }
   };
 
@@ -2338,7 +2342,7 @@ export default function AdminStudents({
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleUndoLog(log)}
+                          onClick={() => setConfirmUndoLog(log)}
                           className="px-2 py-1 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition cursor-pointer"
                         >
                           Hoàn tác
@@ -2815,6 +2819,64 @@ export default function AdminStudents({
                 {batchDeleting
                   ? "Đang xóa..."
                   : `Xóa ${selectedStudentIds.length} học sinh`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÁC NHẬN HOÀN TÁC ĐIỂM */}
+      {confirmUndoLog && (
+        <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl">
+              ↩️
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                Hoàn tác điểm này?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Bạn có chắc muốn hoàn tác{" "}
+                <strong className="text-slate-800">
+                  &quot;{confirmUndoLog.label}&quot;
+                </strong>{" "}
+                (
+                <strong
+                  className={
+                    confirmUndoLog.delta > 0
+                      ? "text-emerald-600"
+                      : "text-rose-600"
+                  }
+                >
+                  {confirmUndoLog.delta > 0
+                    ? `+${confirmUndoLog.delta}`
+                    : confirmUndoLog.delta}{" "}
+                  ⭐
+                </strong>
+                ) của{" "}
+                <strong className="text-slate-800">
+                  {historyModalStudent?.name}
+                </strong>
+                ? Điểm sao sẽ được trả lại như cũ.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmUndoLog(null)}
+                disabled={undoing}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUndo}
+                disabled={undoing}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-all shadow-2xs cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {undoing ? "Đang hoàn tác..." : "Hoàn tác"}
               </button>
             </div>
           </div>
