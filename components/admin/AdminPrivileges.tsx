@@ -144,6 +144,102 @@ const GiftIcon = (p: IconProps) => (
 // Chỉ có 3 tổ thi đua, khớp với tab "Thi đua tổ"
 const GROUPS = ["Tổ 1", "Tổ 2", "Tổ 3"];
 
+// Style thẻ dùng chung để các khối đồng bộ với nhau
+const CARD_BASE =
+  "border border-slate-200 bg-white shadow-sm shadow-amber-950/5";
+const CARD_HOVER =
+  "hover:border-amber-300 hover:shadow-md hover:shadow-amber-500/10";
+const CARD_SELECTED =
+  "border-amber-500 bg-amber-50 ring-2 ring-amber-500/20 shadow-md shadow-amber-500/10";
+
+// Âm thanh bốc thẻ (file nằm trong /public/sounds)
+const SOUND_TICK = "/sounds/privileges.mp3";
+const SOUND_WIN = "/sounds/win.mp3";
+
+// ===== Web Audio: giải mã 1 lần, phát độ trễ gần như bằng 0 =====
+let audioCtx: AudioContext | null = null;
+const bufferCache: Record<string, AudioBuffer> = {};
+let activeTick: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+
+const getAudioCtx = (): AudioContext | null => {
+  if (typeof window === "undefined") return null;
+  if (!audioCtx) {
+    const Ctor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    audioCtx = new Ctor();
+  }
+  return audioCtx;
+};
+
+const loadSound = async (src: string) => {
+  const ctx = getAudioCtx();
+  if (!ctx || bufferCache[src]) return;
+  try {
+    const res = await fetch(src);
+    const data = await res.arrayBuffer();
+    bufferCache[src] = await ctx.decodeAudioData(data);
+  } catch {
+    /* file lỗi/không tồn tại -> bỏ qua */
+  }
+};
+
+// Dừng tiếng tick đang phát bằng fade ngắn (không bị "bụp")
+const stopActiveTick = () => {
+  const ctx = audioCtx;
+  if (!ctx || !activeTick) return;
+  const { source, gain } = activeTick;
+  const t = ctx.currentTime;
+  gain.gain.cancelScheduledValues(t);
+  gain.gain.setValueAtTime(gain.gain.value, t);
+  gain.gain.linearRampToValueAtTime(0, t + 0.01);
+  try {
+    source.stop(t + 0.012);
+  } catch {
+    /* đã dừng */
+  }
+  activeTick = null;
+};
+
+/**
+ * maxDuration (giây): giới hạn độ dài tiếng phát, kèm fade-out cuối
+ * để tiếng tick không bao giờ dài hơn khoảng cách tới bước kế tiếp.
+ */
+const playSound = (
+  src: string,
+  volume = 0.6,
+  opts: { isTick?: boolean; maxDuration?: number } = {},
+) => {
+  const ctx = getAudioCtx();
+  const buffer = bufferCache[src];
+  if (!ctx || !buffer) return;
+  if (ctx.state === "suspended") void ctx.resume();
+
+  if (opts.isTick) stopActiveTick();
+
+  const source = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  source.buffer = buffer;
+  source.connect(gain);
+  gain.connect(ctx.destination);
+
+  const now = ctx.currentTime;
+  gain.gain.setValueAtTime(volume, now);
+
+  // 1. GỌI START TRƯỚC KHI GỌI STOP
+  source.start(now);
+  if (opts.isTick) activeTick = { source, gain };
+
+  // 2. SAU ĐÓ MỚI CẤU HÌNH THỜI GIAN DỪNG (STOP)
+  if (opts.maxDuration && opts.maxDuration < buffer.duration) {
+    const end = now + opts.maxDuration;
+    gain.gain.setValueAtTime(volume, Math.max(now, end - 0.02));
+    gain.gain.linearRampToValueAtTime(0, end);
+    source.stop(end + 0.005);
+  }
+};
+
 // Nhãn hiển thị cho đối tượng áp dụng của 1 thẻ đặc quyền
 const TARGET_LABELS: Record<
   PrivilegeTarget,
@@ -212,13 +308,15 @@ function PrivilegeCard({
 }) {
   const meta = TARGET_LABELS[item.targetType];
   return (
-    <div className="p-4 rounded-3xl border border-slate-100 bg-slate-50/60 flex flex-col justify-between relative transition-all hover:border-amber-300 hover:shadow-2xs">
+    <div
+      className={`p-4 rounded-3xl flex flex-col justify-between relative transition-all ${CARD_BASE} ${CARD_HOVER}`}
+    >
       <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
         <button
           type="button"
           onClick={onEdit}
           title="Chỉnh sửa thẻ"
-          className="w-8 h-8 flex items-center justify-center rounded-xl bg-white hover:bg-amber-50 text-slate-500 hover:text-amber-600 border border-slate-100 transition-all cursor-pointer"
+          className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-500 hover:text-amber-600 border border-slate-200 transition-all cursor-pointer"
         >
           <svg
             className="w-4 h-4"
@@ -238,7 +336,7 @@ function PrivilegeCard({
           type="button"
           onClick={onDelete}
           title="Xóa thẻ"
-          className="w-8 h-8 flex items-center justify-center rounded-xl bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-100 transition-all cursor-pointer"
+          className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 transition-all cursor-pointer"
         >
           <svg
             className="w-4 h-4"
@@ -255,7 +353,7 @@ function PrivilegeCard({
         </button>
       </div>
       <div className="pr-20">
-        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full">
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
           <meta.Icon size={11} /> {meta.label}
         </span>
         <h4 className="text-xs sm:text-sm font-bold text-slate-800 mt-2.5 m-0">
@@ -354,6 +452,11 @@ export default function AdminPrivileges() {
       );
     });
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    void loadSound(SOUND_TICK);
+    void loadSound(SOUND_WIN);
   }, []);
 
   const weekMonday = useMemo(() => getMonday(new Date()), []);
@@ -495,6 +598,12 @@ export default function AdminPrivileges() {
     if (isSpinning || eligiblePrivileges.length === 0 || !activeRecipient)
       return;
 
+    // Mở khóa AudioContext ngay trong cú bấm chuột
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === "suspended") void ctx.resume();
+
+    setIsSpinning(true);
+
     setIsSpinning(true);
     setWonPrivilege(null);
     setFinalWinningIndex(null);
@@ -510,6 +619,11 @@ export default function AdminPrivileges() {
       currentStep++;
 
       if (currentStep < totalSteps) {
+        // tiếng không dài quá khoảng cách tới bước kế tiếp -> không chồng, không tạp âm
+        playSound(SOUND_TICK, 0.5, {
+          isTick: true,
+          maxDuration: Math.min(0.15, (speed + 12) / 1000),
+        });
         speed += 12;
         setTimeout(runSpin, speed);
       } else {
@@ -520,6 +634,9 @@ export default function AdminPrivileges() {
         const finalPrize = getRandomItem(eligiblePrivileges);
         setWonPrivilege(finalPrize);
         setIsSpinning(false);
+
+        stopActiveTick(); // cắt tick cuối trước khi phát tiếng trúng thưởng
+        playSound(SOUND_WIN, 0.8); // phát luôn, không đợi 150ms để khớp lúc thẻ bắt đầu lật
 
         setTimeout(() => {
           setIsFlipped(true);
@@ -666,9 +783,9 @@ export default function AdminPrivileges() {
       </div>
 
       {/* THANH THÔNG TIN NGƯỜI/TỔ ĐANG ĐƯỢC CHỌN */}
-      <div className="p-5 rounded-3xl bg-amber-50/40 border border-amber-100/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="p-5 rounded-3xl bg-amber-50 border border-amber-200 shadow-sm shadow-amber-500/10 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3.5 w-full sm:w-auto">
-          <div className="w-12 h-12 rounded-full bg-white shadow-xs flex items-center justify-center text-lg font-black text-amber-700 border border-amber-100 shrink-0 overflow-hidden">
+          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-lg font-black text-amber-700 border-2 border-amber-200 shadow-sm shrink-0 overflow-hidden">
             {activeRecipient?.avatarUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
@@ -753,13 +870,11 @@ export default function AdminPrivileges() {
                     setActiveRecipient(buildStudentRecipient(student, rank))
                   }
                   className={`p-4 rounded-3xl border transition-all cursor-pointer flex items-center justify-between ${
-                    isSelected
-                      ? "border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/20"
-                      : "border-slate-100 bg-slate-50/60 hover:border-amber-300 hover:shadow-2xs"
+                    isSelected ? CARD_SELECTED : `${CARD_BASE} ${CARD_HOVER}`
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="text-sm font-black w-10 h-10 rounded-full bg-white shadow-xs flex items-center justify-center border border-slate-100 text-amber-700 overflow-hidden">
+                    <div className="text-sm font-black w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-200 text-amber-700 overflow-hidden">
                       {student.avatarUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
@@ -820,13 +935,11 @@ export default function AdminPrivileges() {
                   )
                 }
                 className={`p-4 rounded-3xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                  isSelected
-                    ? "border-amber-500 bg-amber-50/60 ring-2 ring-amber-500/20"
-                    : "border-slate-100 bg-slate-50/60 hover:border-amber-300 hover:shadow-2xs"
+                  isSelected ? CARD_SELECTED : `${CARD_BASE} ${CARD_HOVER}`
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-white shadow-xs flex items-center justify-center border border-slate-100 text-lg">
+                  <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center border border-slate-200 text-lg">
                     {idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"}
                   </div>
                   <div>
@@ -907,7 +1020,7 @@ export default function AdminPrivileges() {
         </div>
 
         {privileges.length === 0 ? (
-          <div className="p-6 bg-slate-50/60 rounded-3xl border border-slate-100 text-center text-slate-400 text-xs">
+          <div className="p-6 bg-slate-50 rounded-3xl border border-dashed border-slate-300 text-center text-slate-400 text-xs">
             Chưa có thẻ đặc quyền nào. Bấm &quot;Thêm Đặc Quyền Mới&quot; để tạo
             thẻ đầu tiên.
           </div>
@@ -926,13 +1039,13 @@ export default function AdminPrivileges() {
       </div>
 
       {/* LỊCH SỬ BỐC THẺ (đọc thật từ activityLog) */}
-      <div className="pt-4 border-t border-slate-100">
+      <div className="pt-4 border-t border-slate-200">
         <h3 className="text-sm font-extrabold text-slate-800 mb-3 m-0 flex items-center gap-2">
           <HistoryIcon className="text-amber-600" /> Lịch sử bốc thăm đặc quyền
         </h3>
 
         {activityLogs.length === 0 ? (
-          <div className="p-6 bg-slate-50/60 rounded-3xl border border-slate-100 text-center text-slate-400 text-xs">
+          <div className="p-6 bg-slate-50 rounded-3xl border border-dashed border-slate-300 text-center text-slate-400 text-xs">
             Chưa có lượt bốc thăm nào diễn ra.
           </div>
         ) : (
@@ -940,12 +1053,12 @@ export default function AdminPrivileges() {
             {activityLogs.slice(0, 30).map((log, idx) => (
               <div
                 key={idx}
-                className="p-3 bg-white rounded-xl border border-slate-100 hover:bg-slate-50 transition-all flex items-center justify-between text-xs"
+                className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm shadow-amber-950/5 hover:border-amber-200 hover:bg-amber-50/40 transition-all flex items-center justify-between text-xs"
               >
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                   <span className="font-bold text-slate-800">{log.name}</span>
-                  <span className="font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-100">
+                  <span className="font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
                     {log.label}
                   </span>
                 </div>
@@ -1005,12 +1118,12 @@ export default function AdminPrivileges() {
                       }}
                       className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                         isChosen
-                          ? "bg-amber-50/80 border-amber-300"
-                          : "bg-white border-slate-100 hover:bg-slate-50"
+                          ? "bg-amber-50 border-amber-400 shadow-sm shadow-amber-500/10"
+                          : "bg-white border-slate-200 hover:border-amber-300 hover:bg-amber-50/40"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-white shadow-xs flex items-center justify-center text-[11px] font-black text-amber-700 border border-slate-100 overflow-hidden">
+                        <div className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-[11px] font-black text-amber-700 border border-slate-200 overflow-hidden">
                           {st.avatarUrl ? (
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img
@@ -1024,7 +1137,7 @@ export default function AdminPrivileges() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
                               {normalizeGroupName(st.group)}
                             </span>
                             <span className="text-[10px] font-semibold text-slate-400">
@@ -1118,7 +1231,7 @@ export default function AdminPrivileges() {
                     style={{ transformStyle: "preserve-3d" }}
                   >
                     <div
-                      className={`w-full h-full rounded-3xl transition-transform duration-700 relative shadow-xs ${
+                      className={`w-full h-full rounded-3xl transition-transform duration-700 relative ${
                         isWinningCard && isFlipped
                           ? "transform-[rotateY(180deg)]"
                           : "transform-[rotateY(0deg)]"
@@ -1129,8 +1242,8 @@ export default function AdminPrivileges() {
                       <div
                         className={`absolute inset-0 w-full h-full rounded-3xl p-3 flex flex-col items-center justify-center text-center border backface-hidden ${
                           isCurrentHighlight
-                            ? "bg-amber-500 text-white border-amber-500 shadow-md scale-102"
-                            : "bg-slate-50 text-slate-600 border-slate-200/80"
+                            ? "bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/30 scale-102"
+                            : "bg-white text-slate-600 border-slate-200 shadow-sm shadow-amber-950/5"
                         }`}
                         style={{ backfaceVisibility: "hidden" }}
                       >
@@ -1138,7 +1251,7 @@ export default function AdminPrivileges() {
                           className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-base mb-1.5 ${
                             isCurrentHighlight
                               ? "bg-white/20 text-white"
-                              : "bg-amber-100 text-amber-700"
+                              : "bg-amber-100 text-amber-700 border border-amber-200"
                           }`}
                         >
                           {isCurrentHighlight ? <StarIcon size={16} /> : "?"}
