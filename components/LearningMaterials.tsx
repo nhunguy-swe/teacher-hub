@@ -75,57 +75,6 @@ export default function LearningMaterials() {
     }
   };
 
-  const getSubjectStyle = (subject: string = "") => {
-    const s = subject.toLowerCase();
-    if (s.includes("toán")) {
-      return {
-        backgroundColor: "#e6f4ea",
-        color: "#137333",
-        border: "1px solid #ceead6",
-      };
-    }
-    if (s.includes("việt") || s.includes("văn")) {
-      return {
-        backgroundColor: "#fce8e6",
-        color: "#c5221f",
-        border: "1px solid #fad2cf",
-      };
-    }
-    if (s.includes("anh") || s.includes("ngoại ngữ")) {
-      return {
-        backgroundColor: "#e8f0fe",
-        color: "#1a73e8",
-        border: "1px solid #d2e3fc",
-      };
-    }
-    if (s.includes("tự nhiên") || s.includes("xã hội") || s.includes("tn")) {
-      return {
-        backgroundColor: "#fef7e0",
-        color: "#b06000",
-        border: "1px solid #fef1c7",
-      };
-    }
-    if (s.includes("kỹ năng") || s.includes("đạo đức")) {
-      return {
-        backgroundColor: "#f3e8fd",
-        color: "#8430ce",
-        border: "1px solid #e9d5fd",
-      };
-    }
-    if (s.includes("thể dục") || s.includes("nhạc") || s.includes("mỹ thuật")) {
-      return {
-        backgroundColor: "#e4f7fb",
-        color: "#007b83",
-        border: "1px solid #c8edf4",
-      };
-    }
-    return {
-      backgroundColor: "#f1f3f4",
-      color: "#3c4043",
-      border: "1px solid #dadce0",
-    };
-  };
-
   const filteredMaterials = materials.filter((item) => {
     if (activeTab === "slide") {
       return item.category === "slide";

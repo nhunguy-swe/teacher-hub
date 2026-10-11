@@ -354,9 +354,19 @@ export default function AdminCompetitionGroups({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full">
           {GROUPS.map((g) => {
             const style = GROUP_STYLES[g];
-            const studentsInGroup = students.filter(
-              (s) => normalizeGroupName(s.group) === g,
-            );
+            const studentsInGroup = students
+              .filter((s) => normalizeGroupName(s.group) === g)
+              .sort((a, b) => {
+                // 1. Điểm tuần cao xuống thấp
+                const diff =
+                  (weeklyDeltaMap[b.name] || 0) - (weeklyDeltaMap[a.name] || 0);
+                if (diff !== 0) return diff;
+                // 2. Bằng điểm tuần: so sao tích lũy
+                const starsDiff = (b.stars || 0) - (a.stars || 0);
+                if (starsDiff !== 0) return starsDiff;
+                // 3. Vẫn bằng: theo tên A-Z
+                return a.name.localeCompare(b.name, "vi");
+              });
 
             return (
               <div
