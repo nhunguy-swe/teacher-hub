@@ -1,6 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useDeferredValue } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useDeferredValue,
+  useCallback,
+  useSyncExternalStore,
+} from "react";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -239,6 +247,103 @@ const getTodayKey = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+// ===== Các kiểu sắp xếp =====
+const SORT_OPTIONS = [
+  { value: "name-asc", label: "Họ tên (A → Z)" },
+  { value: "name-desc", label: "Họ tên (Z → A)" },
+  { value: "given-asc", label: "Tên gọi (A → Z)" },
+  { value: "given-desc", label: "Tên gọi (Z → A)" },
+  { value: "group", label: "Sắp xếp theo Tổ" },
+  { value: "position", label: "Theo chức vụ" },
+  { value: "gender-male", label: "Nam trước, Nữ sau" },
+  { value: "gender-female", label: "Nữ trước, Nam sau" },
+  { value: "stars-desc", label: "Sao tích lũy (Nhiều nhất)" },
+  { value: "stars-asc", label: "Sao tích lũy (Ít nhất)" },
+  { value: "weekly-desc", label: "Điểm tuần (Cao nhất)" },
+  { value: "weekly-asc", label: "Điểm tuần (Thấp nhất)" },
+  { value: "attendance", label: "Điểm danh (Vắng/Muộn lên đầu)" },
+] as const;
+
+const SORT_VALUES = SORT_OPTIONS.map((o) => o.value) as readonly string[];
+const SORT_STORAGE_KEY = "admin-students-sortBy";
+
+// Tên gọi = từ cuối trong họ tên (VD: "Đặng Thùy Dung" -> "Dung")
+const getGivenName = (fullName: string) =>
+  fullName.trim().split(/\s+/).pop() || "";
+
+const ATTENDANCE_ORDER: Record<string, number> = {
+  absent: 0,
+  late: 1,
+  excused: 2,
+  present: 3,
+};
+
+// Chức vụ: "Chưa cập nhật" / không có -> xuống cuối
+const getPositionRank = (position?: string) => {
+  const idx = POSITIONS.indexOf(position || "");
+  return idx <= 0 ? 99 : idx;
+};
+
+// Hook lưu state vào localStorage (đọc sau khi mount để tránh lỗi hydration)
+// Hook lưu state vào localStorage bằng useSyncExternalStore
+// (không setState trong effect, an toàn với SSR/hydration, đồng bộ nhiều tab)
+const PERSIST_EVENT = "persistent-state-change";
+const memoryStore = new Map<string, string>(); // dự phòng nếu localStorage bị chặn
+
+function usePersistentState(
+  key: string,
+  defaultValue: string,
+  allowed?: readonly string[],
+) {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const handler = (e: Event) => {
+        if (e instanceof StorageEvent && e.key !== key) return;
+        onChange();
+      };
+      window.addEventListener("storage", handler); // tab khác đổi
+      window.addEventListener(PERSIST_EVENT, handler); // cùng tab đổi
+      return () => {
+        window.removeEventListener("storage", handler);
+        window.removeEventListener(PERSIST_EVENT, handler);
+      };
+    },
+    [key],
+  );
+
+  const getSnapshot = () => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(key);
+    } catch {
+      saved = memoryStore.get(key) ?? null;
+    }
+    return saved && (!allowed || allowed.includes(saved))
+      ? saved
+      : defaultValue;
+  };
+
+  // Server luôn render giá trị mặc định -> không lệch hydration
+  const value = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    () => defaultValue,
+  );
+
+  const update = useCallback(
+    (next: string) => {
+      memoryStore.set(key, next);
+      try {
+        localStorage.setItem(key, next);
+      } catch {}
+      window.dispatchEvent(new Event(PERSIST_EVENT));
+    },
+    [key],
+  );
+
+  return [value, update] as const;
+}
+
 export default function AdminStudents({
   onUpdated,
   onAdded,
@@ -248,7 +353,11 @@ export default function AdminStudents({
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [groupFilter, setGroupFilter] = useState("all");
+  const [groupFilter, setGroupFilter] = usePersistentState(
+    "admin-students-groupFilter",
+    "all",
+    ["all", ...GROUPS],
+  );
 
   const [editItem, setEditItem] = useState<StudentItem | null>(null);
   const [attendanceModalStudent, setAttendanceModalStudent] =
@@ -260,8 +369,11 @@ export default function AdminStudents({
     useState<StudentItem | null>(null);
   const [studentLogs, setStudentLogs] = useState<ActivityLogItem[]>([]);
 
-  const [sortBy, setSortBy] = useState<string>("name-asc");
-
+  const [sortBy, setSortBy] = usePersistentState(
+    SORT_STORAGE_KEY,
+    "name-asc",
+    SORT_VALUES,
+  );
   // Modal Thêm học sinh đầy đủ
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -450,22 +562,64 @@ export default function AdminStudents({
         matchStudent(s, deferredSearch),
     );
 
+    const byName = (a: StudentItem, b: StudentItem) =>
+      a.name.localeCompare(b.name, "vi");
+    const byGivenName = (a: StudentItem, b: StudentItem) =>
+      getGivenName(a.name).localeCompare(getGivenName(b.name), "vi") ||
+      byName(a, b);
+    const weekly = (s: StudentItem) => weeklyDeltaMap[s.name] || 0;
+
     result.sort((a, b) => {
-      if (sortBy === "name-asc") return a.name.localeCompare(b.name, "vi");
-      if (sortBy === "name-desc") return b.name.localeCompare(a.name, "vi");
-      if (sortBy === "group") {
-        const ga = normalizeGroupName(a.group);
-        const gb = normalizeGroupName(b.group);
-        return ga !== gb
-          ? ga.localeCompare(gb)
-          : a.name.localeCompare(b.name, "vi");
+      switch (sortBy) {
+        case "name-asc":
+          return byName(a, b);
+        case "name-desc":
+          return byName(b, a);
+        case "given-asc":
+          return byGivenName(a, b);
+        case "given-desc":
+          return byGivenName(b, a);
+        case "group": {
+          const ga = normalizeGroupName(a.group);
+          const gb = normalizeGroupName(b.group);
+          return ga !== gb ? ga.localeCompare(gb, "vi") : byGivenName(a, b);
+        }
+        case "position":
+          return (
+            getPositionRank(a.position) - getPositionRank(b.position) ||
+            byGivenName(a, b)
+          );
+        case "gender-male": {
+          const ga = normalizeGenderLabel(a.gender) === "Nam" ? 0 : 1;
+          const gb = normalizeGenderLabel(b.gender) === "Nam" ? 0 : 1;
+          return ga - gb || byGivenName(a, b);
+        }
+        case "gender-female": {
+          const ga = normalizeGenderLabel(a.gender) === "Nữ" ? 0 : 1;
+          const gb = normalizeGenderLabel(b.gender) === "Nữ" ? 0 : 1;
+          return ga - gb || byGivenName(a, b);
+        }
+        case "stars-desc":
+          return (b.stars || 0) - (a.stars || 0) || byGivenName(a, b);
+        case "stars-asc":
+          return (a.stars || 0) - (b.stars || 0) || byGivenName(a, b);
+        case "weekly-desc":
+          return weekly(b) - weekly(a) || byGivenName(a, b);
+        case "weekly-asc":
+          return weekly(a) - weekly(b) || byGivenName(a, b);
+        case "attendance":
+          return (
+            (ATTENDANCE_ORDER[a.status || "present"] ?? 3) -
+              (ATTENDANCE_ORDER[b.status || "present"] ?? 3) ||
+            byGivenName(a, b)
+          );
+        default:
+          return 0;
       }
-      if (sortBy === "stars-desc") return (b.stars || 0) - (a.stars || 0);
-      return 0;
     });
 
     return result;
-  }, [students, deferredSearch, groupFilter, sortBy]);
+  }, [students, deferredSearch, groupFilter, sortBy, weeklyDeltaMap]);
 
   const filteredCriteria = useMemo(() => {
     if (!starModal) return [];
@@ -1204,10 +1358,11 @@ export default function AdminStudents({
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
-            <option value="name-asc">Họ tên (A → Z)</option>
-            <option value="name-desc">Họ tên (Z → A)</option>
-            <option value="group">Sắp xếp theo Tổ</option>
-            <option value="stars-desc">Sao tích lũy (Nhiều nhất)</option>
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
