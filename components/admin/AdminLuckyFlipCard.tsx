@@ -318,13 +318,20 @@ export default function AdminLuckyFlipCard() {
       </div>
 
       {activeStudents.length === 0 ? (
-        <p className="text-lg text-slate-300 text-center py-20">
-          Chưa còn học sinh nào trong danh sách môn {selectedSubject}.
-        </p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-lg text-slate-300 text-center">
+            Chưa còn học sinh nào trong danh sách môn {selectedSubject}.
+          </p>
+        </div>
       ) : (
-        <div className="flex flex-col items-center w-full max-w-5xl mx-auto p-4 select-none">
-          <div className="w-full flex items-center justify-center py-4">
-            <div className="grid grid-cols-5 gap-3 md:gap-5 max-w-4xl w-full px-2">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 select-none">
+          <div className="w-full flex items-center justify-center">
+            <div
+              className="grid grid-cols-5 gap-2 md:gap-4 w-full px-2"
+              style={{
+                maxWidth: "min(64rem, 100%, calc((100vh - 260px) * 1.15))",
+              }}
+            >
               {flipPicks.slice(0, FLIP_CARD_COUNT).map((cardItem, idx) => {
                 const isSelected = selectedFlipIndex === idx;
                 const isFlipped = flippedIdx.has(idx);
@@ -399,7 +406,7 @@ export default function AdminLuckyFlipCard() {
           <button
             onClick={handleDrawFlipCard}
             disabled={isFlippingProcess || activeStudents.length === 0}
-            className="w-full max-w-md py-4 px-8 bg-linear-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-base rounded-3xl shadow-xl shadow-amber-500/25 transition-all duration-300 transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="shrink-0 w-full max-w-md py-3 sm:py-4 px-8 bg-linear-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-black text-base rounded-3xl shadow-xl shadow-amber-500/25 transition-all duration-300 transform active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <span>✨</span>
             <span>

@@ -332,18 +332,16 @@ export default function AdminLuckySpin() {
   };
 
   const fullscreenGameContent = (
-    <div className="flex flex-col items-center justify-center w-full max-w-3xl mx-auto py-8">
-      <div className="flex items-center justify-between w-full mb-6 px-4">
+    <div className="flex flex-col w-full h-full max-w-5xl mx-auto">
+      <div className="flex items-center justify-between w-full shrink-0 px-2 sm:px-4 pb-4">
         <div className="flex items-center gap-3">
           <span className="text-amber-400 flex items-center justify-center scale-125">
             {meta.icon}
           </span>
-          <div>
-            <h2 className="text-2xl font-black text-white tracking-wide">
-              {meta.title} —{" "}
-              <span className="text-amber-400">{selectedSubject}</span>
-            </h2>
-          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide">
+            {meta.title} —{" "}
+            <span className="text-amber-400">{selectedSubject}</span>
+          </h2>
         </div>
 
         <button
@@ -355,12 +353,18 @@ export default function AdminLuckySpin() {
       </div>
 
       {activeStudents.length === 0 ? (
-        <p className="text-lg text-slate-300 text-center py-20">
-          Chưa còn học sinh nào trong danh sách môn {selectedSubject}.
-        </p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-lg text-slate-300 text-center">
+            Chưa còn học sinh nào trong danh sách môn {selectedSubject}.
+          </p>
+        </div>
       ) : (
-        <div className="flex flex-col items-center py-4">
-          <div className="relative w-120 h-120 sm:w-135 sm:h-135 flex items-center justify-center my-4">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4">
+          {/* Bánh xe tự co theo chiều cao/chiều rộng màn hình */}
+          <div
+            className="relative flex items-center justify-center shrink-0"
+            style={{ width: "min(66vh, 92vw)", height: "min(66vh, 92vw)" }}
+          >
             <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 z-30 w-0 h-0 border-l-14 border-l-transparent border-r-14 border-r-transparent border-t-30 border-t-emerald-500 drop-shadow-2xl" />
 
             <div className="w-full h-full rounded-full overflow-hidden shadow-2xl relative bg-white border-4 border-amber-400">
@@ -378,23 +382,25 @@ export default function AdminLuckySpin() {
                 </svg>
               </div>
 
+              {/* Nút SPIN co theo bánh xe */}
               <button
                 onClick={spinWheel}
                 disabled={spinning}
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 w-24 h-24 bg-white hover:bg-slate-50 text-slate-800 rounded-full border-4 border-slate-300 shadow-2xl flex flex-col items-center justify-center font-black hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-80"
+                style={{ width: "16%", height: "16%" }}
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 bg-white hover:bg-slate-50 text-slate-800 rounded-full border-4 border-slate-300 shadow-2xl flex flex-col items-center justify-center font-black hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-80"
               >
-                <span className="text-emerald-600 leading-none text-base font-black">
+                <span className="text-emerald-600 leading-none text-sm sm:text-base font-black">
                   SPIN
                 </span>
-                <span className="text-xs text-slate-400 font-bold mt-1">
+                <span className="text-[10px] sm:text-xs text-slate-400 font-bold mt-1">
                   Click
                 </span>
               </button>
             </div>
           </div>
 
-          <div className="mt-6 px-8 py-3.5 bg-amber-500/20 border-2 border-amber-400/60 rounded-3xl text-center min-w-85 shadow-xl backdrop-blur-md">
-            <p className="text-xl font-black text-amber-300 m-0 tracking-wide">
+          <div className="shrink-0 max-w-full px-6 sm:px-8 py-3 bg-amber-500/20 border-2 border-amber-400/60 rounded-3xl text-center shadow-xl backdrop-blur-md">
+            <p className="text-lg sm:text-xl font-black text-amber-300 m-0 tracking-wide">
               {wheelMessage}
             </p>
           </div>
@@ -402,11 +408,10 @@ export default function AdminLuckySpin() {
       )}
     </div>
   );
-
   return (
     <>
       {isFullscreen ? (
-        <div className="fixed inset-0 z-50 bg-slate-950 backdrop-blur-xl p-6 overflow-y-auto flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-slate-950 p-4 sm:p-8 overflow-hidden flex">
           {fullscreenGameContent}
         </div>
       ) : (

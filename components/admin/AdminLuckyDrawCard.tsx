@@ -285,8 +285,8 @@ export default function AdminLuckyDrawCard() {
   };
 
   const fullscreenGameContent = (
-    <div className="flex flex-col items-center justify-center w-full max-w-3xl mx-auto py-8">
-      <div className="flex items-center justify-between w-full mb-6 px-4">
+    <div className="flex flex-col w-full h-full max-w-5xl mx-auto">
+      <div className="flex items-center justify-between w-full shrink-0 px-2 sm:px-4 pb-4">
         <div className="flex items-center gap-3">
           <span className="text-amber-400 flex items-center justify-center scale-125">
             {meta.icon}
@@ -308,14 +308,20 @@ export default function AdminLuckyDrawCard() {
       </div>
 
       {activeStudents.length === 0 ? (
-        <p className="text-lg text-slate-300 text-center py-20">
-          Chưa còn học sinh nào trong danh sách môn {selectedSubject}.
-        </p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-lg text-slate-300 text-center">
+            Chưa còn học sinh nào trong danh sách môn {selectedSubject}.
+          </p>
+        </div>
       ) : (
-        <div className="flex flex-col items-center py-6">
+        <div className="flex-1 min-h-0 flex items-center justify-center">
           <div
-            className="w-72 h-110 select-none"
-            style={{ perspective: "1400px" }}
+            className="select-none"
+            style={{
+              perspective: "1400px",
+              height: "min(72vh, 120vw)",
+              aspectRatio: "72 / 110",
+            }}
           >
             <div
               className="relative w-full h-full"
