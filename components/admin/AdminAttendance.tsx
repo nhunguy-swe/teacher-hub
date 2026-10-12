@@ -111,6 +111,18 @@ const normalizeGroupName = (groupName?: string) => {
   return groupName.trim();
 };
 
+// Sắp xếp theo tên gọi (từ cuối) A -> Z, trùng tên thì xét tiếp theo họ tên đầy đủ
+const getGivenName = (fullName?: string) => {
+  const parts = (fullName || "").trim().split(/\s+/);
+  return parts[parts.length - 1] || "";
+};
+
+const compareByGivenName = (a?: string, b?: string) => {
+  const byGiven = getGivenName(a).localeCompare(getGivenName(b), "vi");
+  if (byGiven !== 0) return byGiven;
+  return (a || "").localeCompare(b || "", "vi");
+};
+
 const getTodayKey = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -240,6 +252,7 @@ export default function AdminAttendance() {
         } as StudentItem;
       });
 
+      data.sort((a, b) => compareByGivenName(a.name, b.name));
       setStudents(data);
 
       if (needCommit) {
@@ -380,7 +393,7 @@ export default function AdminAttendance() {
       });
 
       const aggregatedList = Object.values(aggregatedMap);
-      aggregatedList.sort((a, b) => a.name.localeCompare(b.name));
+      aggregatedList.sort((a, b) => compareByGivenName(a.name, b.name));
       setAggregatedReportData(aggregatedList);
       setDailyReportData([]);
     },
@@ -430,7 +443,7 @@ export default function AdminAttendance() {
           }
 
           docsData = Array.from(uniqueMap.values());
-          docsData.sort((a, b) => a.name.localeCompare(b.name));
+          docsData.sort((a, b) => compareByGivenName(a.name, b.name));
 
           setDailyReportData(docsData);
           setAggregatedReportData([]);
