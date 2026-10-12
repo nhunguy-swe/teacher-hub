@@ -3,14 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/components/ToastProvider";
 import confetti from "canvas-confetti";
-import {
-  StudentItem,
-  DEFAULT_SUBJECTS,
-  PRIVILEGES_LIST,
-  randomInRange,
-} from "@/lib/types";
+import { StudentItem, DEFAULT_SUBJECTS, randomInRange } from "@/lib/types";
 import { useLuckyDraw } from "@/components/admin/AdminLuckyDrawContext";
 import { useLuckySounds, LUCKY_SOUNDS } from "@/lib/useLuckySounds";
+import PrivilegeManager from "@/components/admin/PrivilegeManager";
 
 // 35 bước x 80ms, khớp với vòng lặp trong handleDrawFlipCard
 const FLIP_STEPS = 35;
@@ -63,6 +59,7 @@ export default function AdminLuckyFlipCard() {
     clearHistoryForSelectedSubject,
     beginDraw,
     endDraw,
+    privileges,
   } = useLuckyDraw();
 
   const { playSpinSound, stopSpinSound, playWinSound } = useLuckySounds({
@@ -156,9 +153,13 @@ export default function AdminLuckyFlipCard() {
   }, [winnerPopup]);
 
   const handleOpenPrivilege = (student: StudentItem) => {
+    if (privileges.length === 0) {
+      toast.warning("Chưa có đặc quyền nào. Hãy thêm ở mục Quản lý đặc quyền!");
+      return;
+    }
     setCurrentPrivilegeWinner(student);
     setWinnerPopup(null);
-    const shuffledPrivs = [...PRIVILEGES_LIST]
+    const shuffledPrivs = [...privileges]
       .sort(() => Math.random() - 0.5)
       .slice(0, 8);
     setActivePrivileges(shuffledPrivs);
@@ -727,6 +728,8 @@ export default function AdminLuckyFlipCard() {
               </div>
             </div>
           </div>
+
+          <PrivilegeManager />
         </div>
       )}
 
@@ -842,90 +845,6 @@ export default function AdminLuckyFlipCard() {
           </div>
         </div>
       )}
-
-      {/* {showPrivilegeScreen && currentPrivilegeWinner && (
-        <div
-          className="fixed inset-0 z-70 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
-          onClick={() => {
-            setShowPrivilegeScreen(false);
-            setCurrentPrivilegeWinner(null);
-          }}
-        >
-          <div
-            className="bg-slate-900 border border-amber-500/30 rounded-3xl  p-6 max-w-xl w-full relative shadow-2xl flex flex-col items-center text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => {
-                setShowPrivilegeScreen(false);
-                setCurrentPrivilegeWinner(null);
-              }}
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold flex items-center justify-center transition-all cursor-pointer border border-slate-700"
-            >
-              ✕
-            </button>
-
-            <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 bg-amber-500/20 text-amber-300 rounded-full border border-amber-400/30 mb-2">
-              Kho báu đặc quyền
-            </span>
-            <h3 className="text-xl font-black text-white mb-1">
-              Học sinh:{" "}
-              <span className="text-amber-400">
-                {currentPrivilegeWinner.name}
-              </span>
-            </h3>
-            <p className="text-xs text-slate-400 mb-6">
-              Hãy chọn 1 ô thẻ bí mật bên dưới để khám phá đặc quyền nhận được!
-            </p>
-
-            <div className="grid grid-cols-4 gap-3 w-full mb-6">
-              {activePrivileges.map((privilegeText, i) => {
-                const isRevealed = revealedPrivileges.has(i);
-
-                return (
-                  <div
-                    key={i}
-                    onClick={() => handleSelectPrivilegeCard(i)}
-                    className={`aspect-4/5 rounded-3xl relative flex flex-col items-center justify-center p-3 text-white font-bold text-xs shadow-xl transition-all duration-300 cursor-pointer select-none ${
-                      isRevealed
-                        ? "bg-linear-to-br from-amber-500 to-orange-600 text-slate-950 scale-105 ring-2 ring-amber-300 shadow-amber-500/30"
-                        : "bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-amber-400/50"
-                    }`}
-                  >
-                    {isRevealed ? (
-                      <div className="flex flex-col items-center justify-center text-center">
-                        <span className="text-2xl mb-1">✨</span>
-                        <span className="text-[11px] font-black text-white leading-tight">
-                          {privilegeText}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center">
-                        <span className="text-3xl font-black text-amber-400 mb-1">
-                          ?
-                        </span>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider">
-                          Mở thẻ
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => {
-                setShowPrivilegeScreen(false);
-                setCurrentPrivilegeWinner(null);
-              }}
-              className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
-            >
-              Hoàn tất & Đóng
-            </button>
-          </div>
-        </div>
-      )} */}
 
       {showPrivilegeScreen && currentPrivilegeWinner && (
         <div

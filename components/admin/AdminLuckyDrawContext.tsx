@@ -22,7 +22,12 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { StudentItem, WinnerHistoryItem, DEFAULT_SUBJECTS } from "@/lib/types";
+import {
+  StudentItem,
+  WinnerHistoryItem,
+  DEFAULT_SUBJECTS,
+  PRIVILEGES_LIST,
+} from "@/lib/types";
 
 // Đổi tên môn học thành id an toàn để dùng làm document id trên Firestore
 // (Firestore không cho phép "/" trong id).
@@ -33,6 +38,14 @@ function subjectToDocId(subject: string) {
 interface LuckyDrawContextValue {
   // Firestore source list (all students, unfiltered)
   students: StudentItem[];
+
+  // Privileges (đồng bộ qua Firestore)
+  privileges: string[];
+  addPrivilege: (text: string) => boolean; // false nếu rỗng/trùng
+  updatePrivilege: (index: number, text: string) => boolean; // false nếu trùng
+  deletePrivilege: (index: number) => void;
+  deletePrivileges: (indices: number[]) => void; // <-- thêm
+  resetPrivileges: () => void; // về danh sách mặc định
 
   // Subjects
   subjectsList: string[];
@@ -284,6 +297,76 @@ export function LuckyDrawProvider({ children }: { children: ReactNode }) {
     setIsDrawing(false);
   }, []);
 
+  // --- Đặc quyền: lưu 1 document duy nhất luckyDrawConfig/privileges ---
+  const [privileges, setPrivileges] = useState<string[]>(PRIVILEGES_LIST);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, "luckyDrawConfig", "privileges"),
+      (snap) => {
+        // Chưa có document => dùng danh sách mặc định.
+        // Đã có (kể cả rỗng) => dùng đúng dữ liệu đã lưu.
+        if (snap.exists()) {
+          setPrivileges((snap.data().items || []) as string[]);
+        } else {
+          setPrivileges(PRIVILEGES_LIST);
+        }
+      },
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const savePrivileges = useCallback((items: string[]) => {
+    setDoc(doc(db, "luckyDrawConfig", "privileges"), { items }).catch((e) =>
+      console.error(e),
+    );
+  }, []);
+
+  const addPrivilege = useCallback(
+    (text: string): boolean => {
+      const trimmed = text.trim();
+      if (!trimmed) return false;
+      if (privileges.some((p) => p.toLowerCase() === trimmed.toLowerCase()))
+        return false;
+      savePrivileges([...privileges, trimmed]);
+      return true;
+    },
+    [privileges, savePrivileges],
+  );
+
+  const updatePrivilege = useCallback(
+    (index: number, text: string): boolean => {
+      const trimmed = text.trim();
+      if (!trimmed) return false;
+      const duplicated = privileges.some(
+        (p, i) => i !== index && p.toLowerCase() === trimmed.toLowerCase(),
+      );
+      if (duplicated) return false;
+      savePrivileges(privileges.map((p, i) => (i === index ? trimmed : p)));
+      return true;
+    },
+    [privileges, savePrivileges],
+  );
+
+  const deletePrivilege = useCallback(
+    (index: number) => {
+      savePrivileges(privileges.filter((_, i) => i !== index));
+    },
+    [privileges, savePrivileges],
+  );
+
+  const deletePrivileges = useCallback(
+    (indices: number[]) => {
+      const toRemove = new Set(indices);
+      savePrivileges(privileges.filter((_, i) => !toRemove.has(i)));
+    },
+    [privileges, savePrivileges],
+  );
+
+  const resetPrivileges = useCallback(() => {
+    savePrivileges(PRIVILEGES_LIST);
+  }, [savePrivileges]);
+
   const value: LuckyDrawContextValue = {
     students,
     subjectsList,
@@ -303,6 +386,12 @@ export function LuckyDrawProvider({ children }: { children: ReactNode }) {
     isDrawing,
     beginDraw,
     endDraw,
+    privileges,
+    addPrivilege,
+    updatePrivilege,
+    deletePrivilege,
+    deletePrivileges,
+    resetPrivileges,
   };
 
   return (

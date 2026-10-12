@@ -40,14 +40,14 @@ export const COLORS = [
 
 // Danh sách các đặc quyền mẫu khi học sinh bấm vào nút "Đặc quyền"
 export const PRIVILEGES_LIST = [
-  "⭐ Miễn 1 bài tập về nhà",
-  "🎯 Cộng 1 điểm vào bài kiểm tra",
-  "🪑 Được chọn chỗ ngồi yêu thích",
-  "👑 Trợ lý lớp học 1 ngày",
-  "🎁 Nhận 1 phần quà đặc biệt",
-  "⏰ Được miễn kiểm tra bài cũ",
-  "💡 Quyền trợ giúp từ bạn bè",
-  "🌟 Xóa 1 lần nhắc nhở sổ đầu bài",
+  "🛡️ Được miễn 1 lần dò bài",
+  "🔄 Được trả lời lại 1 lần nếu sai",
+  "🆘 Quyền gọi bạn trợ giúp khi trả bài",
+  "📖 Được xem sách 1 phút trước khi trả lời",
+  "🎯 Được chọn câu hỏi dễ hơn",
+  "🔁 Được hoãn dò bài sang buổi sau",
+  "🏆 +1 điểm cộng vào bài kiểm tra miệng",
+  "🎤 Được chọn bạn lên trả bài tiếp theo",
 ];
 
 export const getRandomItem = <T>(arr: T[]): { item: T; index: number } => {
