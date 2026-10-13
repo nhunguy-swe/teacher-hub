@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useSyncExternalStore,
+} from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -26,6 +33,7 @@ import {
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
 import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
+import LiveClock from "./LiveClock";
 
 interface StudentItem {
   id: string;
@@ -117,6 +125,76 @@ function formatDateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/* ---------- Lối tắt nhanh: lưu & đọc từ localStorage ---------- */
+const SHORTCUT_STORAGE_KEY = "my_shortcuts";
+const SHORTCUT_CHANGE_EVENT = "my_shortcuts_change";
+const DEFAULT_SHORTCUT_IDS = [
+  "timetable",
+  "seating",
+  "groups",
+  "rewards",
+  "privileges",
+  "noise",
+  "stopwatch",
+  "random",
+];
+
+function subscribeShortcuts(callback: () => void) {
+  window.addEventListener("storage", callback); // đổi từ tab khác
+  window.addEventListener(SHORTCUT_CHANGE_EVENT, callback); // đổi trong cùng tab
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(SHORTCUT_CHANGE_EVENT, callback);
+  };
+}
+
+const getShortcutSnapshot = () => {
+  try {
+    return localStorage.getItem(SHORTCUT_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+// Server không có localStorage -> dùng mặc định, khớp với lần render đầu của client
+const getShortcutServerSnapshot = () => "";
+
+function useShortcutIds() {
+  const raw = useSyncExternalStore(
+    subscribeShortcuts,
+    getShortcutSnapshot,
+    getShortcutServerSnapshot,
+  );
+
+  const ids = useMemo(() => {
+    if (!raw) return DEFAULT_SHORTCUT_IDS;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Chỉ giữ ID còn tồn tại, tránh lỗi nếu sau này đổi/xóa tính năng
+        const valid = parsed.filter(
+          (id): id is string =>
+            typeof id === "string" && DEFAULT_SHORTCUT_IDS.includes(id),
+        );
+        if (valid.length > 0) return valid;
+      }
+    } catch {
+      /* dữ liệu hỏng -> dùng mặc định */
+    }
+    return DEFAULT_SHORTCUT_IDS;
+  }, [raw]);
+
+  const setIds = useCallback((next: string[]) => {
+    try {
+      localStorage.setItem(SHORTCUT_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* trình duyệt chặn localStorage: bỏ qua */
+    }
+    window.dispatchEvent(new Event(SHORTCUT_CHANGE_EVENT));
+  }, []);
+
+  return [ids, setIds] as const;
 }
 
 /* ---------- Biểu đồ tròn (SVG thuần) ---------- */
@@ -647,22 +725,7 @@ export default function AdminStatistics({
     },
   ];
 
-  // Danh sách các ID của các tính năng đang được chọn ghim ra ngoài màn hình chính
-  // Mới (đầy đủ tất cả các tính năng)
-  const [activeShortcutIds, setActiveShortcutIds] = useState<string[]>(
-    typeof window !== "undefined" && localStorage.getItem("my_shortcuts")
-      ? JSON.parse(localStorage.getItem("my_shortcuts")!)
-      : [
-          "timetable",
-          "seating",
-          "groups",
-          "rewards",
-          "privileges",
-          "noise",
-          "stopwatch",
-          "random",
-        ],
-  );
+  const [activeShortcutIds, setActiveShortcutIds] = useShortcutIds();
 
   const router = useRouter();
 
@@ -1279,6 +1342,7 @@ export default function AdminStatistics({
                   ? `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
                   : `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`}
               </span>
+              <LiveClock />
             </div>
           </div>
 
