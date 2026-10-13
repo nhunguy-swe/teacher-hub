@@ -1,15 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { useRouter, usePathname } from "next/navigation";
-import { ToastProvider } from "@/components/ToastProvider";
+import { ToastProvider, useToast } from "@/components/ToastProvider";
 import { LuckyDrawProvider } from "@/components/admin/AdminLuckyDrawContext";
 import Link from "next/link";
 import "../admin.css";
 
-const MENU_ITEMS = [
+/* ------------------------------------------------------------------ */
+/* Kiểu dữ liệu & cấu hình menu                                        */
+/* ------------------------------------------------------------------ */
+
+type MenuNode = {
+  id: string;
+  label: string;
+  path?: string;
+  icon: ReactNode;
+  children?: MenuNode[];
+};
+
+const MENU_ITEMS: MenuNode[] = [
   {
     id: "section-statistics",
     label: "Tổng quan",
@@ -242,7 +254,6 @@ const MENU_ITEMS = [
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="lucide lucide-podium"
           >
             <path d="M12 6V2h-1" />
             <path d="M9 15a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1" />
@@ -357,7 +368,6 @@ const MENU_ITEMS = [
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="lucide lucide-dices"
           >
             <rect width="12" height="12" x="2" y="10" rx="2" ry="2" />
             <path d="m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6" />
@@ -383,7 +393,6 @@ const MENU_ITEMS = [
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="lucide lucide-ferris-wheel"
               >
                 <circle cx="12" cy="12" r="2" />
                 <path d="M12 2v4" />
@@ -412,7 +421,6 @@ const MENU_ITEMS = [
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="lucide lucide-playing-cards"
               >
                 <path d="M14.832 8.445a1 1 0 00-1.589-.098l-2.075 3.098a1 1 0 000 1.11l2 3a1 1 0 001.664 0l2-3a1 1 0 000-1.11z" />
                 <path d="m7.18 20.827-5-11a2 2 0 01.993-2.647L7 5.44" />
@@ -435,7 +443,6 @@ const MENU_ITEMS = [
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="lucide lucide-playing-cards-fan"
               >
                 <path d="M12.65 7.65a2 2 0 012.629-1.046l5.51 2.374a2 2 0 011.046 2.628l-3.957 9.184a2 2 0 01-2.628 1.046l-5.51-2.374a2 2 0 01-1.046-2.628z" />
                 <path d="M18 7.777V4a2 2 0 00-2-2h-6a2 2 0 00-2 2v10a2 2 0 001.137 1.805" />
@@ -547,29 +554,30 @@ const MENU_ITEMS = [
   },
 ];
 
-// Tách riêng mục "Cài đặt" để luôn ghim cố định ở cuối sidebar,
-// không nằm trong vùng menu có thể cuộn/thu gọn.
-const SETTINGS_ITEM = MENU_ITEMS.find(
-  (item) => item.id === "section-settings",
-)!;
+// Mục "Cài đặt" ghim cố định ở cuối sidebar, không nằm trong vùng cuộn.
+const SETTINGS_ITEM = MENU_ITEMS.find((i) => i.id === "section-settings")!;
 const SCROLLABLE_MENU_ITEMS = MENU_ITEMS.filter(
-  (item) => item.id !== "section-settings",
+  (i) => i.id !== "section-settings",
 );
 
-type MenuNode = {
-  id: string;
-  label: string;
-  path?: string;
-  icon: React.ReactNode;
-  children?: MenuNode[];
-};
+const AUTH_PATHS = ["/admin/login", "/admin/forgot-password"];
+const LOGIN_PATH = "/admin/login";
+const HOME_PATH = "/admin/statistics";
+
+/* ------------------------------------------------------------------ */
+/* Hàm tiện ích                                                        */
+/* ------------------------------------------------------------------ */
+
+// So khớp cả trang con: /admin/students/123 vẫn làm sáng mục "Học sinh"
+const matchPath = (path: string | undefined, pathname: string) =>
+  !!path && (pathname === path || pathname.startsWith(path + "/"));
 
 const findActiveItem = (
   items: MenuNode[],
   pathname: string,
 ): MenuNode | null => {
   for (const it of items) {
-    if (it.path === pathname) return it;
+    if (matchPath(it.path, pathname)) return it;
     if (it.children) {
       const found = findActiveItem(it.children, pathname);
       if (found) return found;
@@ -578,385 +586,393 @@ const findActiveItem = (
   return null;
 };
 
-export default function AdminLayout({
-  children,
+// Nhóm có chứa trang đang xem không (để tự mở nhóm đó)
+const containsActive = (node: MenuNode, pathname: string): boolean =>
+  !!node.children?.some(
+    (c) => matchPath(c.path, pathname) || containsActive(c, pathname),
+  );
+
+/* ------------------------------------------------------------------ */
+/* Kiểu dáng theo từng cấp menu                                        */
+/* ------------------------------------------------------------------ */
+
+const LEVEL_STYLES = [
+  {
+    row: "gap-2 lg:gap-3 px-4 py-2 lg:px-3.5 lg:py-2.5 rounded-full lg:rounded-3xl text-xs lg:text-sm font-bold",
+    groupIdle: "bg-amber-50/70 text-slate-700 hover:bg-amber-100/70",
+    linkIdle:
+      "bg-amber-50/70 lg:bg-transparent text-slate-700 hover:bg-amber-50 hover:text-amber-900",
+    activeShadow: "0 4px 6px -1px rgba(245, 158, 11, 0.3)",
+    chevron: 14,
+    children:
+      "flex flex-col lg:pl-2.5 pl-1.5 mt-1 space-y-1 border-l-2 border-amber-200 ml-1.5 lg:ml-2",
+  },
+  {
+    row: "gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold",
+    groupIdle: "text-slate-600 bg-amber-50/40 hover:bg-amber-100/50",
+    linkIdle: "text-slate-600 hover:bg-amber-50 hover:text-amber-900",
+    activeShadow: "0 2px 4px rgba(245, 158, 11, 0.2)",
+    chevron: 12,
+    children:
+      "flex flex-col pl-2.5 mt-1 space-y-1 border-l-2 border-amber-200 ml-1",
+  },
+  {
+    row: "gap-2 px-2.5 py-1 rounded-lg text-xs font-medium",
+    groupIdle: "text-slate-500 bg-amber-50/40 hover:bg-amber-100/50",
+    linkIdle: "text-slate-500 hover:bg-amber-50 hover:text-amber-900",
+    activeShadow: "0 2px 4px rgba(245, 158, 11, 0.2)",
+    chevron: 12,
+    children:
+      "flex flex-col pl-2.5 mt-1 space-y-1 border-l-2 border-amber-200 ml-1",
+  },
+];
+
+const ACTIVE_STYLE = (shadow: string) => ({
+  backgroundColor: "#f59e0b",
+  color: "#ffffff",
+  boxShadow: shadow,
+});
+
+/* ------------------------------------------------------------------ */
+/* Một mục menu (đệ quy, dùng chung cho mọi cấp)                       */
+/* ------------------------------------------------------------------ */
+
+function NavNode({
+  node,
+  level,
+  pathname,
+  openDropdowns,
+  onToggle,
+  onNavigate,
 }: {
-  children: React.ReactNode;
+  node: MenuNode;
+  level: number;
+  pathname: string;
+  openDropdowns: Record<string, boolean>;
+  onToggle: (id: string, currentlyOpen: boolean) => void;
+  onNavigate: () => void;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
-    "section-general-group": true,
-    "section-management-group": true,
-    "section-tools-group": true,
-    "section-lucky-group": true,
-    "section-materials-group": true,
-  });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const s = LEVEL_STYLES[Math.min(level, LEVEL_STYLES.length - 1)];
+  const hasChildren = !!node.children && node.children.length > 0;
 
-  const router = useRouter();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      const isAuthPage =
-        pathname === "/admin/login" || pathname === "/admin/forgot-password";
-
-      if (!user && !isAuthPage) {
-        router.push("/admin/login");
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [router, pathname]);
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMobileMenuOpen(false);
-  }, [pathname]);
-
-  const toggleDropdown = (groupId: string) => {
-    setOpenDropdowns((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
-  };
-
-    const handleLogout = async () => {
-    await signOut(auth);
-    localStorage.removeItem("th_admin_session");
-    router.push("/admin/login");
-  };
-
-  if (loading) {
+  if (!hasChildren) {
+    const isActive = matchPath(node.path, pathname);
     return (
-      <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
-        <p className="text-emerald-400 font-medium">
-          Đang kiểm tra quyền truy cập...
-        </p>
-      </div>
+      <Link
+        href={node.path || "#"}
+        onClick={onNavigate}
+        aria-current={isActive ? "page" : undefined}
+        style={isActive ? ACTIVE_STYLE(s.activeShadow) : undefined}
+        className={`flex items-center transition-all duration-200 ${s.row} ${
+          isActive ? "bg-[#f59e0b] text-white shadow-sm" : s.linkIdle
+        }`}
+      >
+        <span
+          className={`flex items-center ${isActive ? "text-white" : "text-amber-600"}`}
+        >
+          {node.icon}
+        </span>
+        <span className="flex-1">{node.label}</span>
+      </Link>
     );
   }
 
-  const isAuthPage =
-    pathname === "/admin/login" || pathname === "/admin/forgot-password";
-
-  if (isAuthPage) {
-    return <ToastProvider>{children}</ToastProvider>;
-  }
-
-  const isSettingsActive = SETTINGS_ITEM.path === pathname;
-
-  const activeItem =
-    findActiveItem(MENU_ITEMS as MenuNode[], pathname) ?? SETTINGS_ITEM;
+  // Mặc định: chỉ mở nhóm đang chứa trang hiện tại. Người dùng bấm thì ưu tiên lựa chọn của họ.
+  const isOpen = openDropdowns[node.id] ?? containsActive(node, pathname);
 
   return (
-    <ToastProvider>
-      <LuckyDrawProvider>
-        <div className="min-h-screen flex flex-col bg-(--paper)">
-          <div className="topbar">
-            <div className="topbar-inner">
-              <div>
-                <h1 className="logo" style={{ marginBottom: "4px" }}>
+    <div className="flex flex-col">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={() => onToggle(node.id, isOpen)}
+        className={`w-full flex items-center text-left cursor-pointer transition-colors ${s.row} ${s.groupIdle}`}
+      >
+        <span className="flex items-center text-amber-600">{node.icon}</span>
+        <span className="flex-1">{node.label}</span>
+        <span className="p-1 shrink-0 text-amber-700">
+          <svg
+            width={s.chevron}
+            height={s.chevron}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className={s.children}>
+          {node.children!.map((child) => (
+            <NavNode
+              key={child.id}
+              node={child}
+              level={level + 1}
+              pathname={pathname}
+              openDropdowns={openDropdowns}
+              onToggle={onToggle}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Màn hình chờ                                                        */
+/* ------------------------------------------------------------------ */
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-[#0f172a] text-white flex items-center justify-center">
+      <p className="text-emerald-400 font-medium">
+        Đang kiểm tra quyền truy cập...
+      </p>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Khung admin (nằm BÊN TRONG ToastProvider nên dùng được useToast)    */
+/* ------------------------------------------------------------------ */
+
+function AdminShell({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const toast = useToast();
+
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>(
+    {},
+  );
+  // Lưu menu mobile đang mở ở trang nào; đổi trang thì tự coi như đóng
+  const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const isAuthPage = AUTH_PATHS.includes(pathname);
+  const mobileMenuOpen = menuOpenFor === pathname;
+
+  // 1) Đăng ký lắng nghe đăng nhập MỘT LẦN duy nhất
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthReady(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  // 2) Điều hướng theo trạng thái đăng nhập
+  useEffect(() => {
+    if (!authReady) return;
+    if (!user && !isAuthPage) {
+      router.replace(LOGIN_PATH);
+    } else if (user && pathname === LOGIN_PATH) {
+      router.replace(HOME_PATH);
+    }
+  }, [authReady, user, isAuthPage, pathname, router]);
+
+  // 3) Cuộn lên đầu khi đổi trang
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  const handleToggle = (id: string, currentlyOpen: boolean) => {
+    setOpenDropdowns((prev) => ({ ...prev, [id]: !currentlyOpen }));
+  };
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await signOut(auth);
+      try {
+        localStorage.removeItem("th_admin_session");
+      } catch {
+        /* bỏ qua nếu trình duyệt chặn localStorage */
+      }
+      router.replace(LOGIN_PATH);
+    } catch (error) {
+      console.error("Lỗi đăng xuất:", error);
+      toast.error("Đăng xuất thất bại, vui lòng thử lại!");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
+  // Chưa biết trạng thái đăng nhập, hoặc đang chuyển hướng -> không lộ giao diện admin
+  const redirecting =
+    authReady &&
+    ((!user && !isAuthPage) || (!!user && pathname === LOGIN_PATH));
+  if (!authReady || redirecting) return <LoadingScreen />;
+
+  if (isAuthPage) return <>{children}</>;
+
+  const activeItem = findActiveItem(MENU_ITEMS, pathname);
+  const isSettingsActive = matchPath(SETTINGS_ITEM.path, pathname);
+  const closeMobileMenu = () => setMenuOpenFor(null);
+
+  return (
+    <LuckyDrawProvider>
+      <div className="min-h-screen flex flex-col bg-(--paper)">
+        <div className="topbar">
+          <div className="topbar-inner">
+            <div>
+              <h1 className="logo" style={{ marginBottom: "4px" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M12 3L2 8l10 5 10-5-10-5z" />
+                  <path d="M2 12l10 5 10-5" />
+                  <path d="M2 8v6" />
+                </svg>
+                Trang quản lý của Cô Trúc
+              </h1>
+              <p>
+                Quản lý thời khóa biểu, thông báo, tài liệu, trò chơi và hình
+                ảnh lớp học
+              </p>
+            </div>
+            <div className="topbar-actions">
+              <Link href="/" className="btn-ghost">
+                Xem trang chủ
+              </Link>
+              <button
+                type="button"
+                className="btn-danger btn-primary"
+                onClick={handleLogout}
+                disabled={loggingOut}
+              >
+                {loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <main className="w-full px-3 py-4 sm:px-6 sm:py-6 max-w-7xl mx-auto space-y-8 flex-1">
+          <div className="flex flex-col lg:flex-row gap-6 items-start relative">
+            <aside className="w-full lg:w-72 shrink-0 sticky top-0 lg:top-6 z-30">
+              <div className="bg-white backdrop-blur-md p-2.5 lg:p-4 rounded-3xl border border-amber-200 shadow-lg shadow-amber-950/5 lg:flex lg:flex-col lg:h-[calc(100vh-3rem)]">
+                {/* Nút mở menu: chỉ hiện trên điện thoại */}
+                <button
+                  type="button"
+                  aria-expanded={mobileMenuOpen}
+                  onClick={() =>
+                    setMenuOpenFor(mobileMenuOpen ? null : pathname)
+                  }
+                  className="lg:hidden w-full flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#f59e0b] text-white text-sm font-bold shadow-md cursor-pointer"
+                >
+                  <span className="flex items-center">{activeItem?.icon}</span>
+                  <span className="flex-1 text-left truncate">
+                    {activeItem?.label ?? "Danh mục quản lý"}
+                  </span>
                   <svg
+                    width="16"
+                    height="16"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.5"
+                    className={`transition-transform duration-200 ${mobileMenuOpen ? "rotate-180" : ""}`}
                   >
-                    <path d="M12 3L2 8l10 5 10-5-10-5z" />
-                    <path d="M2 12l10 5 10-5" />
-                    <path d="M2 8v6" />
+                    <polyline points="6 9 12 15 18 9" />
                   </svg>
-                  Trang quản lý của Cô Trúc
-                </h1>
-                <p>
-                  Quản lý thời khóa biểu, thông báo, tài liệu, trò chơi và hình
-                  ảnh lớp học
-                </p>
-              </div>
-              <div className="topbar-actions">
-                <Link href="/" className="btn-ghost">
-                  Xem trang chủ
-                </Link>
-                <button
-                  className="btn-danger btn-primary"
-                  onClick={handleLogout}
-                >
-                  Đăng xuất
                 </button>
-              </div>
-            </div>
-          </div>
 
-          <main className="w-full px-3 py-4 sm:px-6 sm:py-6 max-w-7xl mx-auto space-y-8 flex-1">
-            <div className="flex flex-col lg:flex-row gap-6 items-start relative">
-              <aside className="w-full lg:w-72 shrink-0 sticky top-0 lg:top-6 z-30">
-                <div className="bg-white backdrop-blur-md p-2.5 lg:p-4 rounded-3xl border border-amber-200 shadow-lg shadow-amber-950/5 lg:flex lg:flex-col lg:h-[calc(100vh-150px)]">
-                  {/* Nút mở menu: chỉ hiện trên điện thoại */}
-                  <button
-                    type="button"
-                    onClick={() => setMobileMenuOpen((v) => !v)}
-                    className="lg:hidden w-full flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#f59e0b] text-white text-sm font-bold shadow-md cursor-pointer"
-                  >
-                    <span className="flex items-center">{activeItem.icon}</span>
-                    <span className="flex-1 text-left truncate">
-                      {activeItem.label}
-                    </span>
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      className={`transition-transform duration-200 ${mobileMenuOpen ? "rotate-180" : ""}`}
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-
-                  {/* Tiêu đề: chỉ hiện trên máy tính */}
-                  <div className="hidden lg:block px-3 pt-2 pb-3 border-b border-slate-100 mb-2 shrink-0">
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800/70">
-                      Danh mục quản lý
-                    </span>
-                  </div>
-
-                  {/* Vùng menu */}
-                  <div
-                    className={`${mobileMenuOpen ? "flex" : "hidden"} lg:flex flex-col gap-1.5 mt-2 lg:mt-0 max-h-[60vh] lg:max-h-none overflow-y-auto lg:flex-1 [&::-webkit-scrollbar]:hidden`}
-                  >
-                    {SCROLLABLE_MENU_ITEMS.map((item) => {
-                      const hasChildren =
-                        item.children && item.children.length > 0;
-                      const isOpen = openDropdowns[item.id];
-                      const isActive = item.path === pathname;
-
-                      return (
-                        <div key={item.id} className="flex flex-col">
-                          {hasChildren ? (
-                            <div
-                              onClick={() => toggleDropdown(item.id)}
-                              className="w-full flex items-center gap-2 lg:gap-3 px-4 py-2 lg:px-3.5 lg:py-2.5 rounded-full lg:rounded-3xl text-xs lg:text-sm font-bold bg-amber-50/70 text-slate-700 cursor-pointer hover:bg-amber-100/70 transition-colors"
-                            >
-                              <span className="text-sm lg:text-base flex items-center text-amber-600">
-                                {item.icon}
-                              </span>
-                              <span className="flex-1">{item.label}</span>
-                              <div className="p-2 -m-1 shrink-0 text-amber-700">
-                                <svg
-                                  width="14"
-                                  height="14"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                                >
-                                  <polyline points="6 9 12 15 18 9" />
-                                </svg>
-                              </div>
-                            </div>
-                          ) : (
-                            <Link
-                              href={item.path || "#"}
-                              style={
-                                isActive
-                                  ? {
-                                      backgroundColor: "#f59e0b",
-                                      color: "#ffffff",
-                                      boxShadow:
-                                        "0 4px 6px -1px rgba(245, 158, 11, 0.3)",
-                                    }
-                                  : {}
-                              }
-                              className={`flex items-center gap-2 lg:gap-3 px-4 py-2 lg:px-3.5 lg:py-2.5 rounded-full lg:rounded-3xl text-xs lg:text-sm font-bold transition-all duration-200 ${
-                                isActive
-                                  ? "bg-[#f59e0b] text-white shadow-md"
-                                  : "bg-amber-50/70 lg:bg-transparent text-slate-700 hover:bg-amber-50 hover:text-amber-900"
-                              }`}
-                            >
-                              <span
-                                className={`text-sm lg:text-base flex items-center ${isActive ? "text-white" : "text-amber-600"}`}
-                              >
-                                {item.icon}
-                              </span>
-                              <span className="flex-1">{item.label}</span>
-                            </Link>
-                          )}
-
-                          {hasChildren && isOpen && (
-                            <div className="flex flex-col lg:pl-2.5 pl-1.5 mt-1 space-y-1 border-l-2 border-amber-200 ml-1.5 lg:ml-2">
-                              {item.children?.map((child) => {
-                                const hasSubChildren =
-                                  child.children && child.children.length > 0;
-                                const isSubOpen = openDropdowns[child.id];
-                                const isChildActive = child.path === pathname;
-
-                                return (
-                                  <div key={child.id} className="flex flex-col">
-                                    {hasSubChildren ? (
-                                      <div
-                                        onClick={() => toggleDropdown(child.id)}
-                                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 bg-amber-50/40 cursor-pointer hover:bg-amber-100/50 transition-colors"
-                                      >
-                                        <span className="text-amber-600">
-                                          {child.icon}
-                                        </span>
-                                        <span className="flex-1">
-                                          {child.label}
-                                        </span>
-                                        <div className="p-1 text-amber-700">
-                                          <svg
-                                            width="12"
-                                            height="12"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            className={`transition-transform ${isSubOpen ? "rotate-180" : ""}`}
-                                          >
-                                            <polyline points="6 9 12 15 18 9" />
-                                          </svg>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <Link
-                                        href={child.path || "#"}
-                                        style={
-                                          isChildActive
-                                            ? {
-                                                backgroundColor: "#f59e0b",
-                                                color: "#ffffff",
-                                                boxShadow:
-                                                  "0 2px 4px rgba(245, 158, 11, 0.2)",
-                                              }
-                                            : {}
-                                        }
-                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                                          isChildActive
-                                            ? "bg-[#f59e0b] text-white shadow-sm"
-                                            : "text-slate-600 hover:bg-amber-50 hover:text-amber-900"
-                                        }`}
-                                      >
-                                        <span
-                                          className={
-                                            isChildActive
-                                              ? "text-white"
-                                              : "text-amber-600"
-                                          }
-                                        >
-                                          {child.icon}
-                                        </span>
-                                        <span className="flex-1">
-                                          {child.label}
-                                        </span>
-                                      </Link>
-                                    )}
-
-                                    {hasSubChildren && isSubOpen && (
-                                      <div className="flex flex-col pl-2.5 mt-1 space-y-1 border-l-2 border-amber-200 ml-1">
-                                        {child.children?.map((subChild) => {
-                                          const isSubActive =
-                                            subChild.path === pathname;
-                                          return (
-                                            <Link
-                                              key={subChild.id}
-                                              href={subChild.path || "#"}
-                                              style={
-                                                isSubActive
-                                                  ? {
-                                                      backgroundColor:
-                                                        "#f59e0b",
-                                                      color: "#ffffff",
-                                                      boxShadow:
-                                                        "0 2px 4px rgba(245, 158, 11, 0.2)",
-                                                    }
-                                                  : {}
-                                              }
-                                              className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                                                isSubActive
-                                                  ? "bg-[#f59e0b] text-white shadow-sm"
-                                                  : "text-slate-500 hover:bg-amber-50 hover:text-amber-900"
-                                              }`}
-                                            >
-                                              <span
-                                                className={
-                                                  isSubActive
-                                                    ? "text-white"
-                                                    : "text-amber-600"
-                                                }
-                                              >
-                                                {subChild.icon}
-                                              </span>
-                                              <span className="flex-1">
-                                                {subChild.label}
-                                              </span>
-                                            </Link>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Cài đặt - ghim ở đáy sidebar */}
-                  <div
-                    className={`${mobileMenuOpen ? "block" : "hidden"} lg:block shrink-0 mt-2 pt-2 border-t border-slate-100`}
-                  >
-                    <Link
-                      href={SETTINGS_ITEM.path || "#"}
-                      style={
-                        isSettingsActive
-                          ? {
-                              backgroundColor: "#f59e0b",
-                              color: "#ffffff",
-                              boxShadow:
-                                "0 4px 6px -1px rgba(245, 158, 11, 0.3)",
-                            }
-                          : {}
-                      }
-                      className={`flex items-center gap-2 lg:gap-3 px-4 py-2 lg:px-3.5 lg:py-2.5 rounded-full lg:rounded-3xl text-xs lg:text-sm font-bold transition-all duration-200 ${
-                        isSettingsActive
-                          ? "bg-[#f59e0b] text-white shadow-md"
-                          : "bg-amber-50/70 lg:bg-transparent text-slate-700 hover:bg-amber-50 hover:text-amber-900"
-                      }`}
-                    >
-                      <span
-                        className={`text-sm lg:text-base flex items-center ${isSettingsActive ? "text-white" : "text-amber-600"}`}
-                      >
-                        {SETTINGS_ITEM.icon}
-                      </span>
-                      <span className="flex-1">{SETTINGS_ITEM.label}</span>
-                    </Link>
-                  </div>
+                {/* Tiêu đề: chỉ hiện trên máy tính */}
+                <div className="hidden lg:block px-3 pt-2 pb-3 border-b border-slate-100 mb-2 shrink-0">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800/70">
+                    Danh mục quản lý
+                  </span>
                 </div>
-              </aside>
 
-              <div className="flex-1 w-full min-w-0 pt-0">{children}</div>
-            </div>
-          </main>
+                {/* Vùng menu */}
+                <nav
+                  aria-label="Danh mục quản lý"
+                  className={`${mobileMenuOpen ? "flex" : "hidden"} lg:flex flex-col gap-1.5 mt-2 lg:mt-0 max-h-[60vh] lg:max-h-none overflow-y-auto lg:flex-1 [&::-webkit-scrollbar]:hidden`}
+                >
+                  {SCROLLABLE_MENU_ITEMS.map((item) => (
+                    <NavNode
+                      key={item.id}
+                      node={item}
+                      level={0}
+                      pathname={pathname}
+                      openDropdowns={openDropdowns}
+                      onToggle={handleToggle}
+                      onNavigate={closeMobileMenu}
+                    />
+                  ))}
+                </nav>
 
-          <footer
-            style={{
-              background: "#22382f",
-              color: "#fff",
-              padding: "20px",
-              textAlign: "center",
-              marginTop: "auto",
-            }}
-          >
-            <p style={{ fontSize: "13px", color: "#a0a0a0", margin: 0 }}>
-              © {new Date().getFullYear()} — Trang quản lý chính thức.
-            </p>
-          </footer>
-        </div>
-      </LuckyDrawProvider>
+                {/* Cài đặt - ghim ở đáy sidebar */}
+                <div
+                  className={`${mobileMenuOpen ? "block" : "hidden"} lg:block shrink-0 mt-2 pt-2 border-t border-slate-100`}
+                >
+                  <Link
+                    href={SETTINGS_ITEM.path || "#"}
+                    onClick={closeMobileMenu}
+                    aria-current={isSettingsActive ? "page" : undefined}
+                    style={
+                      isSettingsActive
+                        ? ACTIVE_STYLE(LEVEL_STYLES[0].activeShadow)
+                        : undefined
+                    }
+                    className={`flex items-center transition-all duration-200 ${LEVEL_STYLES[0].row} ${
+                      isSettingsActive
+                        ? "bg-[#f59e0b] text-white shadow-md"
+                        : LEVEL_STYLES[0].linkIdle
+                    }`}
+                  >
+                    <span
+                      className={`flex items-center ${isSettingsActive ? "text-white" : "text-amber-600"}`}
+                    >
+                      {SETTINGS_ITEM.icon}
+                    </span>
+                    <span className="flex-1">{SETTINGS_ITEM.label}</span>
+                  </Link>
+                </div>
+              </div>
+            </aside>
+
+            <div className="flex-1 w-full min-w-0 pt-0">{children}</div>
+          </div>
+        </main>
+
+        <footer
+          style={{
+            background: "#22382f",
+            color: "#fff",
+            padding: "20px",
+            textAlign: "center",
+            marginTop: "auto",
+          }}
+        >
+          <p style={{ fontSize: "13px", color: "#a0a0a0", margin: 0 }}>
+            © {new Date().getFullYear()} — Trang quản lý chính thức.
+          </p>
+        </footer>
+      </div>
+    </LuckyDrawProvider>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Layout xuất ra cho Next.js                                          */
+/* ------------------------------------------------------------------ */
+
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <ToastProvider>
+      <AdminShell>{children}</AdminShell>
     </ToastProvider>
   );
 }
