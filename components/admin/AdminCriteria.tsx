@@ -82,6 +82,7 @@ export default function AdminCriteria() {
   const [icon, setIcon] = useState("⭐");
   const [label, setLabel] = useState("");
   const [points, setPoints] = useState(1);
+  const [pointsInput, setPointsInput] = useState("1");
   const [loading, setLoading] = useState(false);
   const [showIconDropdown, setShowIconDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -95,6 +96,7 @@ export default function AdminCriteria() {
   const [editIcon, setEditIcon] = useState("⭐");
   const [editLabel, setEditLabel] = useState("");
   const [editPoints, setEditPoints] = useState(1);
+  const [editPointsInput, setEditPointsInput] = useState("1");
   const [showEditIconDropdown, setShowEditIconDropdown] = useState(false);
   const editDropdownRef = useRef<HTMLDivElement>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -212,6 +214,7 @@ export default function AdminCriteria() {
       setLabel("");
       setIcon("⭐");
       setPoints(1);
+      setPointsInput("1");
     } catch {
       toast.error("Lỗi khi thêm tiêu chí");
     } finally {
@@ -224,6 +227,7 @@ export default function AdminCriteria() {
     setEditIcon(item.icon || "⭐");
     setEditLabel(item.label);
     setEditPoints(Math.abs(item.points));
+    setEditPointsInput(String(Math.abs(item.points)));
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -569,10 +573,17 @@ export default function AdminCriteria() {
           <div className="sm:col-span-1">
             <input
               type="number"
+              inputMode="numeric"
               min={1}
-              className="w-full h-10 px-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none text-center shadow-sm"
-              value={points}
-              onChange={(e) => setPoints(parseInt(e.target.value) || 1)}
+              className="w-full h-10 px-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm text-center leading-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              value={pointsInput}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setPointsInput(raw);
+                const n = parseInt(raw, 10);
+                if (!isNaN(n) && n >= 1) setPoints(n);
+              }}
+              onBlur={() => setPointsInput(String(points))}
             />
           </div>
 
@@ -792,10 +803,17 @@ export default function AdminCriteria() {
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={1}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm"
-                  value={editPoints}
-                  onChange={(e) => setEditPoints(parseInt(e.target.value) || 1)}
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm text-center leading-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  value={editPointsInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setEditPointsInput(raw);
+                    const n = parseInt(raw, 10);
+                    if (!isNaN(n) && n >= 1) setEditPoints(n);
+                  }}
+                  onBlur={() => setEditPointsInput(String(editPoints))}
                 />
               </div>
 

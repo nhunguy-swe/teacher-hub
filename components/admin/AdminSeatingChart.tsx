@@ -31,6 +31,7 @@ export default function AdminSeatingChart() {
   const toast = useToast();
   const [students, setStudents] = useState<Student[]>([]);
   const [rowsPerDay, setRowsPerDay] = useState(5);
+  const [rowsInput, setRowsInput] = useState("5"); // chuỗi đang gõ trong ô
   const [seats, setSeats] = useState<Record<string, string>>({});
   const [teacherBoardText, setTeacherBoardText] = useState(
     "BỤC GIẢNG / BẢNG GIÁO VIÊN",
@@ -74,7 +75,10 @@ export default function AdminSeatingChart() {
         const configDoc = await getDoc(doc(db, "settings", "seatingChart"));
         if (configDoc.exists()) {
           const data = configDoc.data();
-          if (data.rowsPerDay) setRowsPerDay(data.rowsPerDay);
+          if (data.rowsPerDay) {
+            setRowsPerDay(data.rowsPerDay);
+            setRowsInput(String(data.rowsPerDay));
+          }
           if (data.teacherBoardText !== undefined) {
             setTeacherBoardText(data.teacherBoardText);
           }
@@ -368,10 +372,22 @@ export default function AdminSeatingChart() {
             <span>Số bàn mỗi tổ:</span>
             <input
               type="number"
+              inputMode="numeric"
               min={1}
               max={15}
-              value={rowsPerDay}
-              onChange={(e) => setRowsPerDay(parseInt(e.target.value) || 1)}
+              value={rowsInput}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setRowsInput(raw); // cho phép rỗng khi đang xóa
+                const n = parseInt(raw, 10);
+                if (!isNaN(n) && n >= 1 && n <= 15) {
+                  setRowsPerDay(n); // chỉ cập nhật sơ đồ khi hợp lệ
+                }
+              }}
+              onBlur={() => {
+                // rời ô mà rỗng/sai thì trả về số đang dùng
+                setRowsInput(String(rowsPerDay));
+              }}
               className="w-11 px-1 py-0.5 bg-slate-50 border border-slate-200 rounded text-center text-xs text-slate-800 focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -762,7 +778,8 @@ export default function AdminSeatingChart() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto max-h-125 space-y-3 pr-1 no-scrollbar">
+            {/* khung ngoài */}
+            <div className="flex-1 overflow-y-auto sm:max-h-125 space-y-3 pr-1 no-scrollbar">
               {orderedGroups.map(({ title: groupName, groupIndex: gIdx }) => {
                 const displayList = unassignedStudents.filter((s) => {
                   const gi = getGroupIndex(s.group, groupTitles);
@@ -772,7 +789,9 @@ export default function AdminSeatingChart() {
                 return (
                   <div
                     key={gIdx}
-                    className="bg-white border border-slate-200 rounded-lg p-2 space-y-1 shadow-2xs"
+                    className={`bg-white border border-slate-200 rounded-lg p-2 space-y-1 shadow-2xs ${
+                      gIdx === activeGroup ? "block" : "hidden sm:block"
+                    }`}
                   >
                     <div className="flex items-center justify-between border-b border-slate-100 pb-1 mb-1">
                       <span className="text-[10px] font-extrabold text-amber-700 uppercase">
@@ -783,7 +802,8 @@ export default function AdminSeatingChart() {
                       </span>
                     </div>
 
-                    <div className="space-y-1 max-h-40 overflow-y-auto pr-0.5 no-scrollbar">
+                    {/* khung con của từng tổ */}
+                    <div className="space-y-1 sm:max-h-40 overflow-y-auto pr-0.5 no-scrollbar">
                       {displayList.length === 0 ? (
                         <p className="text-[9px] text-slate-400 italic text-center py-1">
                           Đã xếp hết chỗ

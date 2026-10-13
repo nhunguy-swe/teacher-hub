@@ -56,9 +56,11 @@ export default function AdminRewards() {
   const [icon, setIcon] = useState("🎁");
   const [name, setName] = useState("");
   const [cost, setCost] = useState(10);
+  const [costInput, setCostInput] = useState("10");
   const [searchTerm, setSearchTerm] = useState("");
   const [redeemFor, setRedeemFor] = useState<RewardItem | null>(null);
   const [editingReward, setEditingReward] = useState<RewardItem | null>(null);
+  const [editCostInput, setEditCostInput] = useState("1");
   const [selectedStudent, setSelectedStudent] = useState("");
   const [isEditIconDropdownOpen, setIsEditIconDropdownOpen] = useState(false);
   const [selectedRewards, setSelectedRewards] = useState<string[]>([]);
@@ -136,6 +138,7 @@ export default function AdminRewards() {
       setName("");
       setIcon("🎁");
       setCost(10);
+      setCostInput("10");
     } catch {
       toast.error("Lỗi khi thêm phần quà");
     }
@@ -339,10 +342,17 @@ export default function AdminRewards() {
           <div className="sm:col-span-2">
             <input
               type="number"
+              inputMode="numeric"
               min={1}
-              className="w-full h-10 px-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none text-center shadow-xs"
-              value={cost}
-              onChange={(e) => setCost(parseInt(e.target.value) || 1)}
+              className="w-full h-10 px-2 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-xs text-center leading-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              value={costInput}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setCostInput(raw);
+                const n = parseInt(raw, 10);
+                if (!isNaN(n) && n >= 1) setCost(n);
+              }}
+              onBlur={() => setCostInput(String(cost))}
               placeholder="Điểm"
             />
           </div>
@@ -444,7 +454,10 @@ export default function AdminRewards() {
               </div>
               <div className="flex items-center gap-1.5 mt-2">
                 <button
-                  onClick={() => setEditingReward(r)}
+                  onClick={() => {
+                    setEditingReward(r);
+                    setEditCostInput(String(r.cost));
+                  }}
                   className="py-1.5 px-2.5 bg-white text-slate-600 border border-slate-200 rounded-lg hover:bg-amber-50 hover:border-amber-300 hover:text-amber-600 transition-all flex items-center justify-center shadow-xs"
                   title="Sửa"
                 >
@@ -613,15 +626,19 @@ export default function AdminRewards() {
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={1}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm"
-                  value={editingReward.cost}
-                  onChange={(e) =>
-                    setEditingReward({
-                      ...editingReward,
-                      cost: parseInt(e.target.value) || 1,
-                    })
-                  }
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm text-center leading-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  value={editCostInput}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setEditCostInput(raw);
+                    const n = parseInt(raw, 10);
+                    if (!isNaN(n) && n >= 1) {
+                      setEditingReward({ ...editingReward, cost: n });
+                    }
+                  }}
+                  onBlur={() => setEditCostInput(String(editingReward.cost))}
                   required
                 />
               </div>
