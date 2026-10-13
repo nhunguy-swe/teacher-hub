@@ -89,7 +89,6 @@ export default function PrivilegeManager() {
     updatePrivilege,
     deletePrivilege,
     deletePrivileges,
-    resetPrivileges,
   } = useLuckyDraw();
 
   // Form thêm
@@ -116,8 +115,18 @@ export default function PrivilegeManager() {
   const [selectedIdx, setSelectedIdx] = useState<number[]>([]);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
-  // Khôi phục mặc định
-  const [confirmReset, setConfirmReset] = useState(false);
+  // Thu gọn / mở rộng panel
+  const [isOpen, setIsOpen] = useState(false);
+  const [overflowVisible, setOverflowVisible] = useState(false);
+
+  const toggleOpen = () => {
+    if (isOpen) {
+      setOverflowVisible(false); // đóng: bật lại overflow-hidden ngay
+      setIsOpen(false);
+    } else {
+      setIsOpen(true); // mở: overflow-visible được bật sau khi animate xong
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -239,13 +248,6 @@ export default function PrivilegeManager() {
     setSelectedIdx([]);
   };
 
-  // ---------- Khôi phục ----------
-  const handleConfirmReset = () => {
-    resetPrivileges();
-    setConfirmReset(false);
-    toast.success("Đã khôi phục danh sách đặc quyền mặc định!");
-  };
-
   const renderCard = (it: { index: number; icon: string; label: string }) => (
     <div className="h-full bg-white border border-amber-100 hover:border-amber-300 rounded-3xl p-3.5 shadow-sm hover:shadow transition-all flex flex-col justify-between min-w-0">
       <div className="flex items-start justify-between gap-2">
@@ -287,140 +289,171 @@ export default function PrivilegeManager() {
 
   return (
     <>
-      <div className="lg:col-span-12 bg-white p-6 rounded-3xl shadow-lg shadow-amber-950/5 border border-amber-200 space-y-4">
+      <div className="lg:col-span-12 bg-white p-6 rounded-3xl shadow-lg shadow-amber-950/5 border border-amber-200">
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-extrabold text-slate-800">
-                Quản lý đặc quyền
-              </h3>
-              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                {privileges.length} đặc quyền
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Khi học sinh bấm &quot;Đặc quyền&quot;, hệ thống chọn ngẫu nhiên
-              tối đa 8 đặc quyền từ danh sách này.
-            </p>
-          </div>
           <button
-            onClick={() => setConfirmReset(true)}
-            className="px-2.5 py-1 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs cursor-pointer shrink-0"
+            type="button"
+            onClick={toggleOpen}
+            aria-expanded={isOpen}
+            className="flex-1 flex items-center gap-2 text-left cursor-pointer min-w-0"
           >
-            Khôi phục mặc định
+            <h3 className="text-sm font-extrabold text-slate-800">
+              Quản lý đặc quyền
+            </h3>
+            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              {privileges.length} đặc quyền
+            </span>
+            <span
+              className={`ml-auto text-slate-400 transition-transform duration-300 ${
+                isOpen ? "rotate-180" : ""
+              }`}
+            >
+              <ChevronIcon />
+            </span>
           </button>
         </div>
 
-        {/* Khung thêm + tìm kiếm (giống trang Tiêu chí) */}
-        <div className="space-y-3 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
-          <form
-            onSubmit={handleSubmit}
-            className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
+        {/* Vùng thu gọn / mở rộng mượt */}
+        <div
+          aria-hidden={!isOpen}
+          onTransitionEnd={(e) => {
+            if (e.target === e.currentTarget && isOpen) {
+              setOverflowVisible(true);
+            }
+          }}
+          className={`grid transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out ${
+            isOpen
+              ? "grid-rows-[1fr] opacity-100 visible"
+              : "grid-rows-[0fr] opacity-0 invisible"
+          }`}
+        >
+          <div
+            className={`min-h-0 ${
+              overflowVisible ? "overflow-visible" : "overflow-hidden"
+            }`}
           >
-            <div
-              className="relative flex items-center h-10 sm:col-span-2"
-              ref={dropdownRef}
-            >
-              <input
-                className="w-full h-full pl-3 pr-8 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none text-center shadow-sm"
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="🎁"
-              />
-              <button
-                type="button"
-                onClick={() => setShowIconDropdown(!showIconDropdown)}
-                className="absolute right-2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                <ChevronIcon />
-              </button>
+            <div className="space-y-4 pt-4">
+              <p className="text-xs text-slate-400">
+                Khi học sinh bấm &quot;Đặc quyền&quot;, hệ thống chọn ngẫu nhiên
+                tối đa 8 đặc quyền từ danh sách này.
+              </p>
 
-              {showIconDropdown && (
-                <div className="absolute top-full left-0 z-50 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-5 gap-1">
-                  {SUGGESTED_ICONS.map((ic) => (
+              {/* Khung thêm + tìm kiếm (giống trang Tiêu chí) */}
+              <div className="space-y-3 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
+                <form
+                  onSubmit={handleSubmit}
+                  className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center"
+                >
+                  <div
+                    className="relative flex items-center h-10 sm:col-span-2"
+                    ref={dropdownRef}
+                  >
+                    <input
+                      className="w-full h-full pl-3 pr-8 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none text-center shadow-sm"
+                      value={icon}
+                      onChange={(e) => setIcon(e.target.value)}
+                      placeholder="🎁"
+                    />
                     <button
-                      key={ic}
                       type="button"
-                      onClick={() => {
-                        setIcon(ic);
-                        setShowIconDropdown(false);
-                      }}
-                      className="h-8 flex items-center justify-center text-lg hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
+                      onClick={() => setShowIconDropdown(!showIconDropdown)}
+                      className="absolute right-2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                     >
-                      {ic}
+                      <ChevronIcon />
                     </button>
+
+                    {showIconDropdown && (
+                      <div className="absolute top-full left-0 z-50 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-5 gap-1">
+                        {SUGGESTED_ICONS.map((ic) => (
+                          <button
+                            key={ic}
+                            type="button"
+                            onClick={() => {
+                              setIcon(ic);
+                              setShowIconDropdown(false);
+                            }}
+                            className="h-8 flex items-center justify-center text-lg hover:bg-amber-50 rounded-lg transition-all cursor-pointer"
+                          >
+                            {ic}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="sm:col-span-7">
+                    <input
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                      placeholder="Tên đặc quyền... (vd: Miễn 1 bài tập về nhà)"
+                      required
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3 flex gap-2">
+                    <button type="submit" className={btnAmber}>
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      Thêm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenBulk}
+                      disabled={privileges.length === 0}
+                      className={btnRose}
+                    >
+                      <TrashIcon />
+                      Xóa
+                    </button>
+                  </div>
+                </form>
+
+                <div className="flex items-center justify-between pt-1">
+                  <input
+                    type="text"
+                    className="w-full px-3.5 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Tìm kiếm đặc quyền..."
+                  />
+                </div>
+              </div>
+
+              {/* Danh sách dạng thẻ */}
+              {filteredItems.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                  {privileges.length === 0
+                    ? "Chưa có đặc quyền nào. Hãy thêm mới."
+                    : "Không tìm thấy đặc quyền phù hợp."}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredItems.map((it) => (
+                    <div
+                      key={`${it.text}-${it.index}`}
+                      className="min-w-0 h-full"
+                    >
+                      {renderCard(it)}
+                    </div>
                   ))}
                 </div>
               )}
             </div>
-
-            <div className="sm:col-span-7">
-              <input
-                className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none shadow-sm"
-                value={label}
-                onChange={(e) => setLabel(e.target.value)}
-                placeholder="Tên đặc quyền... (vd: Miễn 1 bài tập về nhà)"
-                required
-              />
-            </div>
-
-            <div className="sm:col-span-3 flex gap-2">
-              <button type="submit" className={btnAmber}>
-                <svg
-                  width="16"
-                  height="16"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                Thêm
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenBulk}
-                disabled={privileges.length === 0}
-                className={btnRose}
-              >
-                <TrashIcon />
-                Xóa
-              </button>
-            </div>
-          </form>
-
-          <div className="flex items-center justify-between pt-1">
-            <input
-              type="text"
-              className="w-full px-3.5 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Tìm kiếm đặc quyền..."
-            />
           </div>
         </div>
-
-        {/* Danh sách dạng thẻ */}
-        {filteredItems.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center py-6 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
-            {privileges.length === 0
-              ? "Chưa có đặc quyền nào. Hãy thêm mới hoặc khôi phục mặc định."
-              : "Không tìm thấy đặc quyền phù hợp."}
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filteredItems.map((it) => (
-              <div key={`${it.text}-${it.index}`} className="min-w-0 h-full">
-                {renderCard(it)}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* MODAL SỬA ĐẶC QUYỀN */}
@@ -672,42 +705,6 @@ export default function PrivilegeManager() {
                 className="flex-1 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all shadow-2xs cursor-pointer"
               >
                 Xóa {selectedIdx.length} đặc quyền
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* POPUP XÁC NHẬN KHÔI PHỤC MẶC ĐỊNH */}
-      {confirmReset && (
-        <div className="fixed inset-0 z-80 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl">
-              ↺
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-800">
-                Khôi phục mặc định?
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Toàn bộ đặc quyền bạn đã thêm/sửa sẽ bị thay bằng danh sách mặc
-                định. Hành động này không thể hoàn tác.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setConfirmReset(false)}
-                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReset}
-                className="flex-1 px-4 py-2 text-xs font-bold bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-all shadow-2xs cursor-pointer"
-              >
-                Khôi phục
               </button>
             </div>
           </div>
