@@ -898,7 +898,7 @@ function AdminShell({ children }: { children: ReactNode }) {
                 {/* Vùng menu */}
                 <nav
                   aria-label="Danh mục quản lý"
-                  className={`${mobileMenuOpen ? "flex" : "hidden"} lg:flex flex-col gap-1.5 mt-2 lg:mt-0 max-h-[60vh] lg:max-h-none overflow-y-auto lg:flex-1 [&::-webkit-scrollbar]:hidden`}
+                  className={`${mobileMenuOpen ? "flex" : "hidden"} lg:flex flex-col gap-1.5 mt-2 lg:mt-0 max-h-[60vh] lg:max-h-none overflow-y-auto lg:flex-1 [&::-webkit-scrollbar]:hidden bg-transparent!`}
                 >
                   {SCROLLABLE_MENU_ITEMS.map((item) => (
                     <NavNode
