@@ -20,7 +20,7 @@ const PRECACHE_URLS = [
   "/admin/games",
   "/admin/noise-meter",
   "/admin/stopwatch",
-  "/admin/seatting-chart",
+  "/admin/seating-chart",
   "/admin/lucky-spin",
   "/admin/lucky-drawcard",
   "/admin/lucky-flipcard",
@@ -32,20 +32,22 @@ const PRECACHE_URLS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
+        ),
+      ),
   );
   self.clients.claim();
 });
@@ -75,11 +77,14 @@ self.addEventListener("fetch", (event) => {
           if (offlinePage) return offlinePage;
         }
 
-        return new Response("Offline và chưa có dữ liệu cache cho request này.", {
-          status: 503,
-          statusText: "Service Unavailable",
-          headers: { "Content-Type": "text/plain; charset=utf-8" },
-        });
-      })
+        return new Response(
+          "Offline và chưa có dữ liệu cache cho request này.",
+          {
+            status: 503,
+            statusText: "Service Unavailable",
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          },
+        );
+      }),
   );
 });

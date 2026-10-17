@@ -8,6 +8,7 @@ import { ToastProvider, useToast } from "@/components/ToastProvider";
 import { LuckyDrawProvider } from "@/components/admin/AdminLuckyDrawContext";
 import Link from "next/link";
 import "../admin.css";
+import DailyReminder from "@/components/admin/DailyReminder";
 
 /* ------------------------------------------------------------------ */
 /* Kiểu dữ liệu & cấu hình menu                                        */
@@ -960,6 +961,8 @@ function AdminShell({ children }: { children: ReactNode }) {
             © {new Date().getFullYear()} — Trang quản lý chính thức.
           </p>
         </footer>
+
+        <DailyReminder />
       </div>
     </LuckyDrawProvider>
   );

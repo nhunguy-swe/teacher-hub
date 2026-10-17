@@ -5,6 +5,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useToast } from "@/components/ToastProvider";
 import { ClassInfo, DEFAULT_CLASS_INFO } from "@/lib/classInfo";
+import { useReminderSettings } from "@/lib/reminderSettings";
 
 type Theme = "light" | "dark" | "system";
 
@@ -49,6 +50,7 @@ function applyTheme(theme: Theme) {
 
 export default function AdminSettings() {
   const toast = useToast();
+  const [reminder, updateReminder] = useReminderSettings();
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const [info, setInfo] = useState<ClassInfo>(DEFAULT_CLASS_INFO);
@@ -154,6 +156,49 @@ export default function AdminSettings() {
           ))}
         </div>
       </div>
+
+      {/* Nhắc nhở */}
+<div className="space-y-3 pt-5 border-t border-slate-100">
+  <h3 className="text-sm font-bold text-slate-700">Nhắc nhở</h3>
+
+  <label className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer">
+    <div>
+      <div className="text-sm font-bold text-slate-800">
+        🔔 Bật nhắc nhở khi mở web
+      </div>
+      <div className="text-[11px] text-slate-500">
+        Hiện thông báo 1 lần mỗi ngày khi bạn mở trang quản trị
+      </div>
+    </div>
+    <input
+      type="checkbox"
+      className="w-5 h-5 accent-amber-600 cursor-pointer"
+      checked={reminder.enabled}
+      onChange={(e) => updateReminder({ enabled: e.target.checked })}
+    />
+  </label>
+
+  <label
+    className={`flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer ${
+      reminder.enabled ? "" : "opacity-50 pointer-events-none"
+    }`}
+  >
+    <div>
+      <div className="text-sm font-bold text-slate-800">
+        🎂 Nhắc sinh nhật học sinh
+      </div>
+      <div className="text-[11px] text-slate-500">
+        Dựa trên ngày sinh trong mục Học sinh
+      </div>
+    </div>
+    <input
+      type="checkbox"
+      className="w-5 h-5 accent-amber-600 cursor-pointer"
+      checked={reminder.birthday}
+      onChange={(e) => updateReminder({ birthday: e.target.checked })}
+    />
+  </label>
+</div>
 
       {/* Thông tin lớp */}
       <div className="space-y-3 pt-5 border-t border-slate-100">
