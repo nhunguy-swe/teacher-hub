@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 const ZONES = [
   { label: "Tuyệt vời", color: "#22C55E", max: 40 },
@@ -35,6 +36,9 @@ export default function AdminNoiseMeter() {
   const [avgVal, setAvgVal] = useState(0);
   const [historyBars, setHistoryBars] = useState<HistoryBar[]>([]);
 
+  const [pipWin, setPipWin] = useState<Window | null>(null);
+  const [pipSize, setPipSize] = useState({ w: 340, h: 440 });
+
   // State điều khiển chế độ phóng to toàn màn hình cho lớp theo dõi
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -47,6 +51,10 @@ export default function AdminNoiseMeter() {
 
   const sampleBufferRef = useRef<number[]>([]);
   const smoothedLevelRef = useRef(0);
+
+  const [pipActive, setPipActive] = useState(false);
+  const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -251,6 +259,175 @@ export default function AdminNoiseMeter() {
   const zone = zoneFor(level);
   const isTooLoud = level >= 85; // Ngưỡng quá ồn
 
+  const pipWide = pipSize.w > pipSize.h * 1.2; // cửa sổ nằm ngang
+  const pipCompact = pipSize.h < 230 || pipSize.w < 200; // rất nhỏ -> ẩn nút
+  const pipRing = Math.max(
+    70,
+    pipWide
+      ? Math.min(pipSize.h - 32, pipSize.w * 0.45)
+      : Math.min(pipSize.w - 32, pipSize.h * (pipCompact ? 0.78 : 0.5)),
+  );
+
+  type DocPipApi = {
+    requestWindow: (opts?: {
+      width?: number;
+      height?: number;
+    }) => Promise<Window>;
+  };
+
+  const hasDocPip =
+    typeof window !== "undefined" && "documentPictureInPicture" in window;
+
+  const openDocPip = async () => {
+    try {
+      const api = (window as unknown as { documentPictureInPicture: DocPipApi })
+        .documentPictureInPicture;
+      const win = await api.requestWindow({ width: 340, height: 440 });
+
+      // Sao chép CSS (Tailwind) sang cửa sổ mới
+      Array.from(document.styleSheets).forEach((sheet) => {
+        try {
+          const css = Array.from(sheet.cssRules)
+            .map((r) => r.cssText)
+            .join("");
+          const style = win.document.createElement("style");
+          style.textContent = css;
+          win.document.head.appendChild(style);
+        } catch {
+          if (sheet.href) {
+            const link = win.document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = sheet.href;
+            win.document.head.appendChild(link);
+          }
+        }
+      });
+
+      win.document.body.style.margin = "0";
+      win.addEventListener("pagehide", () => setPipWin(null));
+
+      const updateSize = () =>
+        setPipSize({ w: win.innerWidth, h: win.innerHeight });
+      updateSize();
+      win.addEventListener("resize", updateSize);
+
+      setPipWin(win);
+    } catch {
+      setHint("Không thể mở cửa sổ nổi. Hãy thử lại.");
+    }
+  };
+
+  const closeDocPip = () => {
+    pipWin?.close();
+    setPipWin(null);
+  };
+
+  // Đóng khi rời trang
+  useEffect(() => {
+    return () => {
+      pipWin?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const drawPip = () => {
+    const canvas = pipCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = 185;
+    const r = 130;
+
+    // nền (đỏ khi quá ồn)
+    ctx.fillStyle = isTooLoud ? "#e11d48" : "#1e1b4b";
+    ctx.fillRect(0, 0, W, H);
+
+    // vòng nền
+    ctx.lineWidth = 18;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // vòng mức âm lượng
+    const start = -Math.PI / 2;
+    const end = start + (Math.min(100, level) / 100) * Math.PI * 2;
+    ctx.strokeStyle = isTooLoud ? "#ffffff" : zone.color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, start, Math.max(end, start + 0.001));
+    ctx.stroke();
+
+    // số dB
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 84px sans-serif";
+    ctx.fillText(String(Math.round(level)), cx, cy - 8);
+    ctx.font = "bold 20px sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillText("dB gần đúng", cx, cy + 52);
+
+    // nhãn trạng thái
+    ctx.font = "800 30px sans-serif";
+    ctx.fillStyle = isTooLoud ? "#ffffff" : zone.color;
+    ctx.fillText(isTooLoud ? "🚨 QUÁ ỒN!" : zone.label, cx, H - 36);
+  };
+
+  // Vẽ lại mỗi khi mức âm lượng thay đổi
+  useEffect(() => {
+    if (pipActive) drawPip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, pipActive, isTooLoud]);
+
+  const startPip = async () => {
+    if (!document.pictureInPictureEnabled) {
+      setHint("Trình duyệt này chưa hỗ trợ Hình trong hình.");
+      return;
+    }
+    try {
+      if (!pipCanvasRef.current) {
+        const c = document.createElement("canvas");
+        c.width = 400;
+        c.height = 400;
+        pipCanvasRef.current = c;
+      }
+      drawPip();
+
+      if (!pipVideoRef.current) {
+        const v = document.createElement("video");
+        v.muted = true;
+        v.playsInline = true;
+        v.srcObject = pipCanvasRef.current.captureStream(30);
+        v.addEventListener("leavepictureinpicture", () => setPipActive(false));
+        pipVideoRef.current = v;
+      }
+      await pipVideoRef.current.play();
+      await pipVideoRef.current.requestPictureInPicture();
+      setPipActive(true);
+    } catch {
+      setHint("Không thể mở Hình trong hình. Hãy thử lại.");
+    }
+  };
+
+  const stopPip = async () => {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture().catch(() => {});
+    }
+    setPipActive(false);
+  };
+
+  // Đóng PiP khi rời trang
+  useEffect(() => {
+    return () => {
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+      }
+    };
+  }, []);
+
   const radius = 90;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset =
@@ -308,6 +485,42 @@ export default function AdminNoiseMeter() {
                   />
                 </svg>
                 <span className="hidden sm:inline">Phòng học lớn</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (pipWin) return closeDocPip();
+                  if (pipActive) return stopPip();
+                  return hasDocPip ? openDocPip() : startPip();
+                }}
+                title="Cửa sổ nổi luôn hiển thị trên cùng"
+                className={`px-3.5 py-2 text-xs font-bold border rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer ${
+                  pipWin || pipActive
+                    ? "bg-amber-600 text-white border-amber-600"
+                    : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-600 hover:text-white hover:border-amber-600"
+                }`}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <rect
+                    x="12"
+                    y="12"
+                    width="7"
+                    height="5"
+                    rx="1"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span className="hidden sm:inline">
+                  {pipWin || pipActive ? "Tắt cửa sổ nổi" : "Cửa sổ nổi"}
+                </span>
               </button>
 
               {isTooLoud && (
@@ -695,6 +908,116 @@ export default function AdminNoiseMeter() {
           </button>
         </div>
       )}
+
+      {pipWin &&
+        createPortal(
+          <div
+            className={`h-screen w-screen overflow-hidden flex items-center justify-center text-white font-sans transition-colors ${
+              pipWide ? "flex-row gap-6 px-5" : "flex-col gap-3 p-4"
+            } ${isTooLoud ? "bg-rose-600" : "bg-[#1e1b4b]"}`}
+          >
+            {/* Vòng đo */}
+            <div
+              className="relative shrink-0 flex items-center justify-center"
+              style={{ width: pipRing, height: pipRing }}
+            >
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
+                <circle
+                  cx="100"
+                  cy="100"
+                  r={radius}
+                  fill="transparent"
+                  stroke="rgba(255,255,255,0.15)"
+                  strokeWidth="14"
+                />
+                <circle
+                  cx="100"
+                  cy="100"
+                  r={radius}
+                  fill="transparent"
+                  stroke={isTooLoud ? "#ffffff" : zone.color}
+                  strokeWidth="14"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  style={{
+                    transition:
+                      "stroke-dashoffset 0.25s ease, stroke 0.3s ease",
+                  }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span
+                  className="font-black leading-none"
+                  style={{ fontSize: pipRing * 0.3 }}
+                >
+                  {Math.round(level)}
+                </span>
+                {pipRing >= 110 && (
+                  <span
+                    className="font-bold text-white/70"
+                    style={{ fontSize: Math.max(9, pipRing * 0.07) }}
+                  >
+                    dB gần đúng
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Nhãn + nút */}
+            <div
+              className={`flex flex-col items-center gap-3 ${pipWide ? "items-start" : ""}`}
+            >
+              <div
+                className="font-extrabold rounded-full text-center"
+                style={{
+                  fontSize: Math.max(10, pipRing * 0.085),
+                  padding: `${pipRing * 0.03}px ${pipRing * 0.08}px`,
+                  background: isTooLoud
+                    ? "rgba(255,255,255,0.2)"
+                    : `${zone.color}30`,
+                  color: isTooLoud ? "#fff" : zone.color,
+                }}
+              >
+                {isTooLoud ? "🚨 QUÁ ỒN!" : zone.label}
+              </div>
+
+              {!pipCompact && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={
+                      running && !paused ? pauseMeasurement : startMeasurement
+                    }
+                    className={`rounded-xl font-black cursor-pointer active:scale-95 ${
+                      running && !paused ? "bg-amber-500" : "bg-emerald-600"
+                    }`}
+                    style={{
+                      fontSize: Math.max(10, pipRing * 0.07),
+                      padding: `${pipRing * 0.05}px ${pipRing * 0.1}px`,
+                    }}
+                  >
+                    {running && !paused
+                      ? "Tạm dừng"
+                      : paused
+                        ? "Tiếp tục"
+                        : "Bắt đầu"}
+                  </button>
+                  <button
+                    onClick={resetMeasurement}
+                    className="rounded-xl font-bold bg-white/10 hover:bg-white/20 border border-white/20 cursor-pointer"
+                    style={{
+                      fontSize: Math.max(10, pipRing * 0.07),
+                      padding: `${pipRing * 0.05}px ${pipRing * 0.08}px`,
+                    }}
+                  >
+                    Đặt lại
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>,
+          pipWin.document.body,
+        )}
     </div>
   );
 }
