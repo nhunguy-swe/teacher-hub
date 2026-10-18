@@ -247,6 +247,9 @@ const getTodayKey = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
+const formatDMY = (d: Date) =>
+  `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
 // ===== Các kiểu sắp xếp =====
 const SORT_OPTIONS = [
   { value: "name-asc", label: "Họ tên (A → Z)" },
@@ -2474,38 +2477,76 @@ export default function AdminStudents({
                   Chưa có lịch sử cộng trừ điểm.
                 </p>
               ) : (
-                studentLogs.map((log, idx) => (
-                  <div
-                    key={idx}
-                    className="flex justify-between items-center gap-2 border-b border-slate-100 pb-2 last:border-0"
-                  >
-                    <span className="text-slate-700 font-medium">
-                      {log.label}
-                    </span>
-                    {log.type === "attendance" ? (
-                      <span className="font-bold text-slate-500 whitespace-nowrap">
-                        {log.status && STATUS_META[log.status]?.label}
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span
-                          className={`font-bold whitespace-nowrap ${
-                            log.delta > 0 ? "text-emerald-600" : "text-rose-600"
-                          }`}
-                        >
-                          {log.delta > 0 ? `+${log.delta}` : log.delta} ⭐
+                studentLogs.map((log, idx) => {
+                  const logDate = (
+                    log.createdAt as { toDate?: () => Date } | null | undefined
+                  )?.toDate?.();
+
+                  const monday = logDate ? getMonday(new Date(logDate)) : null;
+                  const sunday = monday ? getSunday(monday) : null;
+
+                  const prevDate = (
+                    studentLogs[idx - 1]?.createdAt as
+                      | { toDate?: () => Date }
+                      | null
+                      | undefined
+                  )?.toDate?.();
+                  const prevMonday = prevDate
+                    ? getMonday(new Date(prevDate))
+                    : null;
+
+                  // Hiện dải phân cách khi là dòng đầu tiên hoặc sang tuần khác dòng trước
+                  const showDivider =
+                    monday &&
+                    sunday &&
+                    (idx === 0 ||
+                      !prevMonday ||
+                      monday.getTime() !== prevMonday.getTime());
+
+                  return (
+                    <div key={log.id ?? idx} className="space-y-2">
+                      {showDivider && monday && sunday && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 h-px bg-amber-200" />
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 whitespace-nowrap">
+                            Tuần {formatDMY(monday)} – {formatDMY(sunday)}
+                          </span>
+                          <div className="flex-1 h-px bg-amber-200" />
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-100 pb-2 last:border-0">
+                        <span className="text-slate-700 font-medium">
+                          {log.label}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmUndoLog(log)}
-                          className="px-2 py-1 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition cursor-pointer"
-                        >
-                          Hoàn tác
-                        </button>
+                        {log.type === "attendance" ? (
+                          <span className="font-bold text-slate-500 whitespace-nowrap">
+                            {log.status && STATUS_META[log.status]?.label}
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`font-bold whitespace-nowrap ${
+                                log.delta > 0
+                                  ? "text-emerald-600"
+                                  : "text-rose-600"
+                              }`}
+                            >
+                              {log.delta > 0 ? `+${log.delta}` : log.delta} ⭐
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmUndoLog(log)}
+                              className="px-2 py-1 text-[10px] font-bold bg-slate-100 text-slate-600 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition cursor-pointer"
+                            >
+                              Hoàn tác
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))
+                    </div>
+                  );
+                })
               )}
             </div>
 
