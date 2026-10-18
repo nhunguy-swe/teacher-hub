@@ -501,6 +501,12 @@ export default function AdminStatistics({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const [showAllActivityModal, setShowAllActivityModal] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
+
+  const closeActivityModal = () => {
+    setShowAllActivityModal(false);
+    setActivityExpanded(false);
+  };
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
@@ -2555,7 +2561,11 @@ export default function AdminStatistics({
       {/* --- POPUP HIỂN THỊ TẤT CẢ LỊCH SỬ HOẠT ĐỘNG --- */}
       {showAllActivityModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-fadeIn mb-0">
-          <div className="bg-white w-full max-w-lg rounded-3xl  shadow-2xl border border-amber-200  overflow-hidden flex flex-col max-h-[85vh]">
+          <div
+            className={`bg-white w-full rounded-3xl shadow-2xl border border-amber-200 overflow-hidden flex flex-col max-h-[85vh] transition-all duration-200 ${
+              activityExpanded ? "max-w-3xl" : "max-w-lg"
+            }`}
+          >
             {/* Tiêu đề Popup */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
               <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2 m-0">
@@ -2574,12 +2584,48 @@ export default function AdminStatistics({
                 </svg>{" "}
                 Lịch sử tất cả hoạt động ({activity.length})
               </h3>
-              <button
-                onClick={() => setShowAllActivityModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivityExpanded((v) => !v)}
+                  title={activityExpanded ? "Thu nhỏ" : "Phóng to"}
+                  className="hidden sm:flex text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full items-center justify-center transition-colors cursor-pointer"
+                >
+                  {activityExpanded ? (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={closeActivityModal}
+                  className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Danh sách toàn bộ hoạt động (Không dùng slice để hiện tất cả) */}
@@ -2649,7 +2695,7 @@ export default function AdminStatistics({
             {/* Nút đóng Popup */}
             <div className="px-6 py-3 border-t border-slate-100 flex justify-end">
               <button
-                onClick={() => setShowAllActivityModal(false)}
+                onClick={closeActivityModal}
                 className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5"
               >
                 Đóng
