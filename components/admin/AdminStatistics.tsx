@@ -59,6 +59,7 @@ interface ActivityItem {
   name: string;
   label: string;
   delta: number;
+  createdAt?: { toDate?: () => Date } | null;
 }
 interface TaskItem {
   id: string;
@@ -126,6 +127,17 @@ function formatDateKey(date: Date) {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+const formatDMY = (d: Date) =>
+  `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
+// Trả về Thứ 2 & Chủ nhật của tuần chứa dòng log (null nếu chưa có timestamp)
+const getLogWeek = (createdAt: ActivityItem["createdAt"]) => {
+  const d = createdAt?.toDate?.();
+  if (!d) return null;
+  const monday = getMonday(new Date(d));
+  return { monday, sunday: getSunday(monday) };
+};
 
 /* ---------- Lối tắt nhanh: lưu & đọc từ localStorage ---------- */
 const SHORTCUT_STORAGE_KEY = "my_shortcuts";
@@ -2577,33 +2589,60 @@ export default function AdminStatistics({
                   Chưa có hoạt động nào.
                 </p>
               ) : (
-                activity.map((a, index) => (
-                  <div
-                    key={a.id || index}
-                    className="flex items-center gap-3 pt-3 first:pt-0 text-xs"
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
-                      style={{
-                        background: a.delta >= 0 ? "#1F9D6D" : "#C1443A",
-                      }}
-                    />
-                    <p className="m-0 flex-1 text-slate-700">
-                      <b className="font-bold text-slate-800">{a.name}</b> —{" "}
-                      {a.label}{" "}
-                    </p>
-                    <span
-                      className="font-extrabold px-2 py-0.5 rounded-md text-[11px] shrink-0"
-                      style={{
-                        color: a.delta >= 0 ? "#1F9D6D" : "#C1443A",
-                        background: a.delta >= 0 ? "#E6F4EA" : "#FCE8E6",
-                      }}
+                activity.map((a, index) => {
+                  const week = getLogWeek(a.createdAt);
+                  const prevWeek =
+                    index > 0
+                      ? getLogWeek(activity[index - 1].createdAt)
+                      : null;
+
+                  const showDivider =
+                    week &&
+                    (index === 0 ||
+                      !prevWeek ||
+                      formatDMY(week.monday) !== formatDMY(prevWeek.monday));
+
+                  return (
+                    <div
+                      key={a.id || index}
+                      className="pt-3 first:pt-0 space-y-3"
                     >
-                      {a.delta >= 0 ? "+" : ""}
-                      {a.delta}
-                    </span>
-                  </div>
-                ))
+                      {showDivider && week && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-px bg-amber-200" />
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 whitespace-nowrap">
+                            Tuần {formatDMY(week.monday)} –{" "}
+                            {formatDMY(week.sunday)}
+                          </span>
+                          <div className="flex-1 h-px bg-amber-200" />
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 text-xs">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
+                          style={{
+                            background: a.delta >= 0 ? "#1F9D6D" : "#C1443A",
+                          }}
+                        />
+                        <p className="m-0 flex-1 text-slate-700">
+                          <b className="font-bold text-slate-800">{a.name}</b> —{" "}
+                          {a.label}{" "}
+                        </p>
+                        <span
+                          className="font-extrabold px-2 py-0.5 rounded-md text-[11px] shrink-0"
+                          style={{
+                            color: a.delta >= 0 ? "#1F9D6D" : "#C1443A",
+                            background: a.delta >= 0 ? "#E6F4EA" : "#FCE8E6",
+                          }}
+                        >
+                          {a.delta >= 0 ? "+" : ""}
+                          {a.delta}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
