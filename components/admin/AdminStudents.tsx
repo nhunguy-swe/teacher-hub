@@ -371,6 +371,7 @@ export default function AdminStudents({
   const [historyModalStudent, setHistoryModalStudent] =
     useState<StudentItem | null>(null);
   const [studentLogs, setStudentLogs] = useState<ActivityLogItem[]>([]);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const [sortBy, setSortBy] = usePersistentState(
     SORT_STORAGE_KEY,
@@ -407,6 +408,11 @@ export default function AdminStudents({
 
   const [criteriaSearch, setCriteriaSearch] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const closeHistoryModal = () => {
+    setHistoryModalStudent(null);
+    setHistoryExpanded(false);
+  };
 
   const closeStarModal = () => {
     setStarModal(null);
@@ -2458,20 +2464,64 @@ export default function AdminStudents({
       {/* Popup Xem Lịch Sử Điểm Sao */}
       {historyModalStudent && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 backdrop-blur-xs">
-          <div className="bg-white p-6 rounded-3xl  w-full max-w-md border border-[#EFE8D8] shadow-xl space-y-4">
+          <div
+            className={`bg-white p-6 rounded-3xl w-full border border-[#EFE8D8] shadow-xl space-y-4 transition-all duration-200 ${
+              historyExpanded ? "max-w-3xl" : "max-w-md"
+            }`}
+          >
             <div className="flex justify-between items-center pb-2 border-b border-slate-100 ">
               <h3 className="text-sm font-extrabold text-slate-800 m-0 flex items-center gap-2">
                 Lịch sử điểm: {historyModalStudent.name}
               </h3>
-              <button
-                onClick={() => setHistoryModalStudent(null)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHistoryExpanded((v) => !v)}
+                  title={historyExpanded ? "Thu nhỏ" : "Phóng to"}
+                  className="hidden sm:flex text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full items-center justify-center transition-colors cursor-pointer"
+                >
+                  {historyExpanded ? (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={closeHistoryModal}
+                  className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="max-h-60 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar:none space-y-2 bg-white p-3 rounded-3xl border border-amber-100 text-xs">
+            <div
+              className={`overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] space-y-2 bg-white p-3 rounded-3xl border border-amber-100 text-xs ${
+                historyExpanded ? "max-h-[60vh]" : "max-h-60"
+              }`}
+            >
               {studentLogs.length === 0 ? (
                 <p className="text-slate-400 text-center py-4 m-0">
                   Chưa có lịch sử cộng trừ điểm.
@@ -2551,7 +2601,7 @@ export default function AdminStudents({
             </div>
 
             <button
-              onClick={() => setHistoryModalStudent(null)}
+              onClick={closeHistoryModal}
               className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md shadow-amber-500/20"
             >
               Đóng
