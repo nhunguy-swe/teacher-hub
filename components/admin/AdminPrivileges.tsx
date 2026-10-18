@@ -367,6 +367,23 @@ function PrivilegeCard({
   );
 }
 
+function HistoryRow({ log }: { log: ActivityLogItem }) {
+  return (
+    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm shadow-amber-950/5 hover:border-amber-200 hover:bg-amber-50/40 transition-all flex items-center justify-between gap-3 text-xs">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+        <span className="font-bold text-slate-800">{log.name}</span>
+        <span className="font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+          {log.label}
+        </span>
+      </div>
+      <span className="text-slate-400 font-mono font-medium shrink-0">
+        {formatLogDate(log)}
+      </span>
+    </div>
+  );
+}
+
 export default function AdminPrivileges() {
   const toast = useToast();
 
@@ -568,6 +585,7 @@ export default function AdminPrivileges() {
   const [isFlipped, setIsFlipped] = useState(false);
 
   const [showAllModal, setShowAllModal] = useState(false);
+  const [showAllHistoryModal, setShowAllHistoryModal] = useState(false);
 
   // Modal Thêm / Chỉnh sửa thẻ đặc quyền (dùng chung 1 modal cho cả 2 chế độ)
   const [showPrivilegeModal, setShowPrivilegeModal] = useState(false);
@@ -1040,32 +1058,30 @@ export default function AdminPrivileges() {
 
       {/* LỊCH SỬ BỐC THẺ (đọc thật từ activityLog) */}
       <div className="pt-4 border-t border-slate-200">
-        <h3 className="text-sm font-extrabold text-slate-800 mb-3 m-0 flex items-center gap-2">
-          <HistoryIcon className="text-amber-600" /> Lịch sử bốc thăm đặc quyền
-        </h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-extrabold text-slate-800 m-0 flex items-center gap-2">
+            <HistoryIcon className="text-amber-600" /> Lịch sử bốc thăm đặc
+            quyền ({activityLogs.length})
+          </h3>
+          {activityLogs.length > 3 && (
+            <button
+              onClick={() => setShowAllHistoryModal(true)}
+              className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>Xem tất cả</span>
+              <span>→</span>
+            </button>
+          )}
+        </div>
 
         {activityLogs.length === 0 ? (
           <div className="p-6 bg-slate-50 rounded-3xl border border-dashed border-slate-300 text-center text-slate-400 text-xs">
             Chưa có lượt bốc thăm nào diễn ra.
           </div>
         ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
-            {activityLogs.slice(0, 30).map((log, idx) => (
-              <div
-                key={idx}
-                className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm shadow-amber-950/5 hover:border-amber-200 hover:bg-amber-50/40 transition-all flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="font-bold text-slate-800">{log.name}</span>
-                  <span className="font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                    {log.label}
-                  </span>
-                </div>
-                <span className="text-slate-400 font-mono font-medium">
-                  {formatLogDate(log)}
-                </span>
-              </div>
+          <div className="space-y-2">
+            {activityLogs.slice(0, 3).map((log, idx) => (
+              <HistoryRow key={idx} log={log} />
             ))}
           </div>
         )}
@@ -1347,6 +1363,46 @@ export default function AdminPrivileges() {
             <div className="pt-3 border-t border-slate-100 mt-3 flex justify-end">
               <button
                 onClick={() => setShowAllModal(false)}
+                className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL XEM TẤT CẢ LỊCH SỬ BỐC THĂM */}
+      {showAllHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-xl border border-[#EFE8D8] relative max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
+              <h3 className="text-base font-bold text-slate-800 m-0">
+                Lịch Sử Bốc Thăm Đặc Quyền ({activityLogs.length})
+              </h3>
+              <button
+                onClick={() => setShowAllHistoryModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto pr-1 flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+              {activityLogs.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-8">
+                  Chưa có lượt bốc thăm nào diễn ra.
+                </div>
+              ) : (
+                activityLogs.map((log, idx) => (
+                  <HistoryRow key={idx} log={log} />
+                ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 mt-3 flex justify-end">
+              <button
+                onClick={() => setShowAllHistoryModal(false)}
                 className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
                 Đóng
