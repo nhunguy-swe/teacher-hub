@@ -12,13 +12,14 @@ import {
   updateDoc,
   getDoc,
 } from "firebase/firestore";
+import { GROUPS, normalizeGroupName, getSeatGroupIndex } from "@/lib/groups";
+import * as XLSX from "xlsx";
 import {
-  buildWeeklyDeltaMap,
   getMonday,
   getSunday,
+  buildWeeklyDeltaMap,
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
-import { GROUPS, normalizeGroupName, getSeatGroupIndex } from "@/lib/groups";
 
 interface StudentItem {
   id: string;
@@ -104,6 +105,21 @@ const GROUP_STYLES: Record<
   },
 };
 
+type WeeklyLog = {
+  name: string;
+  delta: number;
+  label?: string;
+  createdAt?: { toDate: () => Date } | null;
+};
+
+const formatDMY = (d: Date) =>
+  `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
+const getTodayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export default function AdminCompetitionGroups({
   setActiveTab,
 }: {
@@ -143,9 +159,7 @@ export default function AdminCompetitionGroups({
   }, []);
 
   // Toàn bộ activityLog, dùng để tính điểm THI ĐUA TUẦN NÀY (100đ/hs + cộng/trừ)
-  const [weeklyActivityLogs, setWeeklyActivityLogs] = useState<
-    { name: string; delta: number; createdAt?: { toDate: () => Date } | null }[]
-  >([]);
+  const [weeklyActivityLogs, setWeeklyActivityLogs] = useState<WeeklyLog[]>([]);
 
   useEffect(() => {
     const q = query(
@@ -153,13 +167,7 @@ export default function AdminCompetitionGroups({
       orderBy("createdAt", "desc"),
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setWeeklyActivityLogs(
-        snapshot.docs.map((docSnap) => docSnap.data()) as {
-          name: string;
-          delta: number;
-          createdAt?: { toDate: () => Date } | null;
-        }[],
-      );
+      setWeeklyActivityLogs(snapshot.docs.map((d) => d.data()) as WeeklyLog[]);
     });
     return () => unsubscribe();
   }, []);
@@ -199,6 +207,123 @@ export default function AdminCompetitionGroups({
     });
     return totals;
   }, [students, bonus]);
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportTab, setReportTab] = useState<"summary" | "members" | "bonus">(
+    "summary",
+  );
+
+  const weekLabel = `${formatDMY(weekMonday)} – ${formatDMY(weekSunday)}`;
+
+  // Sheet 1: Tổng hợp theo tổ (xếp hạng theo tổng điểm tuần)
+  const reportSummaryRows = useMemo(() => {
+    const rows = GROUPS.map((g) => {
+      const members = students.filter((s) => normalizeGroupName(s.group) === g);
+      return {
+        Tổ: g,
+        "Số học sinh": members.length,
+        "Điểm tuần của tổ": weeklyGroupTotals[g] || 0,
+        "Thưởng/phạt tổ (tuần)": weeklyDeltaMap[g] || 0,
+        "Điểm TB/hs": members.length
+          ? Number(((weeklyGroupTotals[g] || 0) / members.length).toFixed(1))
+          : 0,
+        "Sao cộng dồn": groupStars[g] || 0,
+      };
+    }).sort((a, b) => b["Điểm tuần của tổ"] - a["Điểm tuần của tổ"]);
+
+    return rows.map((r, i) => ({ Hạng: i + 1, ...r }));
+  }, [students, weeklyGroupTotals, weeklyDeltaMap, groupStars]);
+
+  // Sheet 2: Chi tiết thành viên từng tổ
+  const reportMemberRows = useMemo(() => {
+    const rows: Record<string, string | number>[] = [];
+    GROUPS.forEach((g) => {
+      students
+        .filter((s) => normalizeGroupName(s.group) === g)
+        .sort(
+          (a, b) =>
+            (weeklyDeltaMap[b.name] || 0) - (weeklyDeltaMap[a.name] || 0) ||
+            (b.stars || 0) - (a.stars || 0) ||
+            a.name.localeCompare(b.name, "vi"),
+        )
+        .forEach((s, i) => {
+          rows.push({
+            Tổ: g,
+            STT: i + 1,
+            "Họ và tên": s.name,
+            "Điểm tuần": WEEKLY_BASE_POINTS + (weeklyDeltaMap[s.name] || 0),
+            "Cộng/trừ tuần": weeklyDeltaMap[s.name] || 0,
+            "Sao tích lũy": s.stars || 0,
+          });
+        });
+    });
+    return rows;
+  }, [students, weeklyDeltaMap]);
+
+  // Sheet 3: Lịch sử thưởng/phạt ghi cho tổ
+  const reportBonusRows = useMemo(
+    () =>
+      weeklyActivityLogs
+        .filter((l) => GROUPS.includes(l.name))
+        .map((l) => ({
+          "Thời gian": l.createdAt?.toDate
+            ? l.createdAt.toDate().toLocaleString("vi-VN")
+            : "",
+          Tổ: l.name,
+          "Nội dung": l.label || "",
+          Điểm: l.delta,
+        })),
+    [weeklyActivityLogs],
+  );
+
+  const reportPreviewRows: Record<string, string | number>[] =
+    reportTab === "summary"
+      ? reportSummaryRows
+      : reportTab === "members"
+        ? reportMemberRows
+        : reportBonusRows;
+
+  const reportCellClass = (key: string, value: string | number) => {
+    if (typeof value !== "number") return "text-slate-700";
+    if (["Điểm", "Cộng/trừ tuần", "Thưởng/phạt tổ (tuần)"].includes(key)) {
+      if (value > 0) return "text-emerald-600 font-bold";
+      if (value < 0) return "text-rose-600 font-bold";
+      return "text-slate-400";
+    }
+    return "text-slate-700";
+  };
+
+  const handleExportReport = () => {
+    try {
+      const makeSheet = (rows: Record<string, unknown>[], widths: number[]) => {
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws["!cols"] = widths.map((wch) => ({ wch }));
+        return ws;
+      };
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(reportSummaryRows, [6, 8, 12, 18, 22, 12, 14]),
+        "Tổng hợp tổ",
+      );
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(reportMemberRows, [8, 6, 26, 12, 14, 13]),
+        "Chi tiết thành viên",
+      );
+      XLSX.utils.book_append_sheet(
+        wb,
+        makeSheet(reportBonusRows, [20, 8, 50, 8]),
+        "Thưởng phạt tổ",
+      );
+      XLSX.writeFile(wb, `Bao-cao-thi-dua-to-${getTodayKey()}.xlsx`);
+      toast.success("Xuất file Excel thành công!");
+      setReportOpen(false);
+    } catch (error) {
+      console.error("Lỗi xuất Excel:", error);
+      toast.error("Không thể xuất file Excel.");
+    }
+  };
 
   const handleOpenAddModal = () => {
     setSearchTerm("");
@@ -326,28 +451,52 @@ export default function AdminCompetitionGroups({
               Thi đua tổ
             </h2>
           </div>
-          <button
-            onClick={() => handleOpenAddModal()}
-            className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="lucide lucide-list-sort-descending preview-icon"
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setReportOpen(true)}
+              className="px-3.5 py-2 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
             >
-              <path d="M15 12H3" />
-              <path d="M3 5h18" />
-              <path d="M9 19H3" />
-            </svg>
-            Sắp xếp tổ
-          </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 15V3" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="m7 10 5 5 5-5" />
+              </svg>
+              Xuất Excel báo cáo
+            </button>
+            <button
+              onClick={() => handleOpenAddModal()}
+              className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="lucide lucide-list-sort-descending preview-icon"
+              >
+                <path d="M15 12H3" />
+                <path d="M3 5h18" />
+                <path d="M9 19H3" />
+              </svg>
+              Sắp xếp tổ
+            </button>
+          </div>
         </div>
 
         {/* Grid điều chỉnh hiển thị 3 cột thay vì 4 */}
@@ -437,6 +586,109 @@ export default function AdminCompetitionGroups({
           })}
         </div>
       </div>
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 shadow-xl border border-slate-100 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base m-0">
+                  Xem &amp; xuất báo cáo thi đua tổ
+                </h3>
+                <p className="text-[11px] text-slate-400 m-0 mt-0.5">
+                  Tuần {weekLabel}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-xs font-bold text-slate-600 shrink-0">
+                Nội dung:
+              </span>
+              <select
+                value={reportTab}
+                onChange={(e) =>
+                  setReportTab(
+                    e.target.value as "summary" | "members" | "bonus",
+                  )
+                }
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+              >
+                <option value="summary">Tổng hợp theo tổ</option>
+                <option value="members">Chi tiết thành viên</option>
+                <option value="bonus">Lịch sử thưởng/phạt tổ</option>
+              </select>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl flex-1 overflow-auto">
+              {reportPreviewRows.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-10">
+                  Chưa có dữ liệu trong mục này.
+                </p>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                  <thead className="sticky top-0">
+                    <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                      {Object.keys(reportPreviewRows[0]).map((key) => (
+                        <th key={key} className="p-2.5 font-bold">
+                          {key}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {reportPreviewRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80">
+                        {Object.entries(row).map(([key, value]) => (
+                          <td
+                            key={key}
+                            className={`p-2.5 ${reportCellClass(key, value)}`}
+                          >
+                            {typeof value === "number" &&
+                            value > 0 &&
+                            [
+                              "Điểm",
+                              "Cộng/trừ tuần",
+                              "Thưởng/phạt tổ (tuần)",
+                            ].includes(key)
+                              ? `+${value}`
+                              : value}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+              <button
+                type="button"
+                onClick={handleExportReport}
+                disabled={reportSummaryRows.length === 0}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
+              >
+                Tải file Excel (.xlsx)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 transition-all shadow-2xs cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL ĐƯỢC ĐẶT Ở NGOÀI HOÀN TOÀN ĐỂ KHÔNG BỊ KẸT KHUNG */}
       {showAddModal && (
