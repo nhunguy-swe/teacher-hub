@@ -112,6 +112,16 @@ type WeeklyLog = {
   createdAt?: { toDate: () => Date } | null;
 };
 
+type ReportRange =
+  | "thisWeek"
+  | "lastWeek"
+  | "thisMonth"
+  | "lastMonth"
+  | "all"
+  | "custom";
+
+const SIGNED_KEYS = ["Điểm", "Cộng/trừ", "Thưởng/phạt tổ"];
+
 const formatDMY = (d: Date) =>
   `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
@@ -212,29 +222,154 @@ export default function AdminCompetitionGroups({
   const [reportTab, setReportTab] = useState<"summary" | "members" | "bonus">(
     "summary",
   );
+  const [reportRange, setReportRange] = useState<ReportRange>("thisWeek");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
-  const weekLabel = `${formatDMY(weekMonday)} – ${formatDMY(weekSunday)}`;
+  // ===== Mốc thời gian của báo cáo =====
+  const parseLocalDate = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const endOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 
-  // Sheet 1: Tổng hợp theo tổ (xếp hạng theo tổng điểm tuần)
+  const reportBounds = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const mon0 = getMonday(new Date());
+    const mon = new Date(mon0.getFullYear(), mon0.getMonth(), mon0.getDate());
+
+    switch (reportRange) {
+      case "thisWeek":
+        return {
+          start: mon,
+          end: endOfDay(
+            new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6),
+          ),
+        };
+      case "lastWeek": {
+        const s = new Date(
+          mon.getFullYear(),
+          mon.getMonth(),
+          mon.getDate() - 7,
+        );
+        return {
+          start: s,
+          end: endOfDay(
+            new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6),
+          ),
+        };
+      }
+      case "thisMonth":
+        return {
+          start: new Date(y, m, 1),
+          end: endOfDay(new Date(y, m + 1, 0)),
+        };
+      case "lastMonth":
+        return {
+          start: new Date(y, m - 1, 1),
+          end: endOfDay(new Date(y, m, 0)),
+        };
+      case "custom":
+        return {
+          start: customFrom ? parseLocalDate(customFrom) : null,
+          end: customTo ? endOfDay(parseLocalDate(customTo)) : null,
+        };
+      default:
+        return { start: null, end: null };
+    }
+  }, [reportRange, customFrom, customTo]);
+
+  const reportRangeLabel = useMemo(() => {
+    const { start, end } = reportBounds;
+    if (!start && !end) return "Toàn bộ thời gian";
+    return `${start ? formatDMY(start) : "..."} – ${end ? formatDMY(end) : "..."}`;
+  }, [reportBounds]);
+
+  // Log nằm trong mốc đã chọn
+  const rangeLogs = useMemo(() => {
+    const { start, end } = reportBounds;
+    if (!start && !end) return weeklyActivityLogs;
+    return weeklyActivityLogs.filter((l) => {
+      const d = l.createdAt?.toDate?.();
+      if (!d) return false;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+  }, [weeklyActivityLogs, reportBounds]);
+
+  // Tổng cộng/trừ của từng học sinh / từng tổ trong mốc đã chọn
+  const rangeDeltaMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    rangeLogs.forEach((l) => {
+      map[l.name] = (map[l.name] || 0) + (l.delta || 0);
+    });
+    return map;
+  }, [rangeLogs]);
+
+  // Số tuần trong mốc (mỗi tuần mỗi học sinh có 100đ nền)
+  const weeksCount = useMemo(() => {
+    const now = new Date();
+    let earliest: Date | null = null;
+    weeklyActivityLogs.forEach((l) => {
+      const d = l.createdAt?.toDate?.();
+      if (d && (!earliest || d < earliest)) earliest = d;
+    });
+    const effStart = reportBounds.start ?? earliest ?? now;
+    const effEnd =
+      reportBounds.end && reportBounds.end < now ? reportBounds.end : now;
+
+    let cursor = getMonday(new Date(effStart));
+    let count = 0;
+    while (cursor <= effEnd && count < 520) {
+      count++;
+      cursor = new Date(
+        cursor.getFullYear(),
+        cursor.getMonth(),
+        cursor.getDate() + 7,
+      );
+    }
+    return Math.max(1, count);
+  }, [reportBounds, weeklyActivityLogs]);
+
+  const rangeGroupTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    GROUPS.forEach((g) => {
+      const members = students
+        .filter((s) => normalizeGroupName(s.group) === g)
+        .reduce(
+          (a, s) =>
+            a + WEEKLY_BASE_POINTS * weeksCount + (rangeDeltaMap[s.name] || 0),
+          0,
+        );
+      totals[g] = members + (rangeDeltaMap[g] || 0);
+    });
+    return totals;
+  }, [students, rangeDeltaMap, weeksCount]);
+
+  // Sheet 1: Tổng hợp theo tổ
   const reportSummaryRows = useMemo(() => {
     const rows = GROUPS.map((g) => {
       const members = students.filter((s) => normalizeGroupName(s.group) === g);
       return {
         Tổ: g,
         "Số học sinh": members.length,
-        "Điểm tuần của tổ": weeklyGroupTotals[g] || 0,
-        "Thưởng/phạt tổ (tuần)": weeklyDeltaMap[g] || 0,
+        "Điểm của tổ": rangeGroupTotals[g] || 0,
+        "Thưởng/phạt tổ": rangeDeltaMap[g] || 0,
         "Điểm TB/hs": members.length
-          ? Number(((weeklyGroupTotals[g] || 0) / members.length).toFixed(1))
+          ? Number(((rangeGroupTotals[g] || 0) / members.length).toFixed(1))
           : 0,
         "Sao cộng dồn": groupStars[g] || 0,
       };
-    }).sort((a, b) => b["Điểm tuần của tổ"] - a["Điểm tuần của tổ"]);
+    }).sort((a, b) => b["Điểm của tổ"] - a["Điểm của tổ"]);
 
     return rows.map((r, i) => ({ Hạng: i + 1, ...r }));
-  }, [students, weeklyGroupTotals, weeklyDeltaMap, groupStars]);
+  }, [students, rangeGroupTotals, rangeDeltaMap, groupStars]);
 
-  // Sheet 2: Chi tiết thành viên từng tổ
+  // Sheet 2: Chi tiết thành viên
   const reportMemberRows = useMemo(() => {
     const rows: Record<string, string | number>[] = [];
     GROUPS.forEach((g) => {
@@ -242,7 +377,7 @@ export default function AdminCompetitionGroups({
         .filter((s) => normalizeGroupName(s.group) === g)
         .sort(
           (a, b) =>
-            (weeklyDeltaMap[b.name] || 0) - (weeklyDeltaMap[a.name] || 0) ||
+            (rangeDeltaMap[b.name] || 0) - (rangeDeltaMap[a.name] || 0) ||
             (b.stars || 0) - (a.stars || 0) ||
             a.name.localeCompare(b.name, "vi"),
         )
@@ -251,19 +386,20 @@ export default function AdminCompetitionGroups({
             Tổ: g,
             STT: i + 1,
             "Họ và tên": s.name,
-            "Điểm tuần": WEEKLY_BASE_POINTS + (weeklyDeltaMap[s.name] || 0),
-            "Cộng/trừ tuần": weeklyDeltaMap[s.name] || 0,
+            "Tổng điểm":
+              WEEKLY_BASE_POINTS * weeksCount + (rangeDeltaMap[s.name] || 0),
+            "Cộng/trừ": rangeDeltaMap[s.name] || 0,
             "Sao tích lũy": s.stars || 0,
           });
         });
     });
     return rows;
-  }, [students, weeklyDeltaMap]);
+  }, [students, rangeDeltaMap, weeksCount]);
 
   // Sheet 3: Lịch sử thưởng/phạt ghi cho tổ
   const reportBonusRows = useMemo(
     () =>
-      weeklyActivityLogs
+      rangeLogs
         .filter((l) => GROUPS.includes(l.name))
         .map((l) => ({
           "Thời gian": l.createdAt?.toDate
@@ -273,7 +409,7 @@ export default function AdminCompetitionGroups({
           "Nội dung": l.label || "",
           Điểm: l.delta,
         })),
-    [weeklyActivityLogs],
+    [rangeLogs],
   );
 
   const reportPreviewRows: Record<string, string | number>[] =
@@ -285,7 +421,7 @@ export default function AdminCompetitionGroups({
 
   const reportCellClass = (key: string, value: string | number) => {
     if (typeof value !== "number") return "text-slate-700";
-    if (["Điểm", "Cộng/trừ tuần", "Thưởng/phạt tổ (tuần)"].includes(key)) {
+    if (SIGNED_KEYS.includes(key)) {
       if (value > 0) return "text-emerald-600 font-bold";
       if (value < 0) return "text-rose-600 font-bold";
       return "text-slate-400";
@@ -316,7 +452,10 @@ export default function AdminCompetitionGroups({
         makeSheet(reportBonusRows, [20, 8, 50, 8]),
         "Thưởng phạt tổ",
       );
-      XLSX.writeFile(wb, `Bao-cao-thi-dua-to-${getTodayKey()}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `Bao-cao-thi-dua-to-${reportRange}-${getTodayKey()}.xlsx`,
+      );
       toast.success("Xuất file Excel thành công!");
       setReportOpen(false);
     } catch (error) {
@@ -455,7 +594,11 @@ export default function AdminCompetitionGroups({
             <button
               type="button"
               onClick={() => setReportOpen(true)}
-              className="px-3.5 py-2 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              className="px-3.5 py-2 text-xs font-bold rounded-xl border transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap
+    bg-indigo-50! border-indigo-200! text-indigo-700!
+    dark:bg-indigo-950/50! dark:border-indigo-800! dark:text-indigo-300!
+    hover:bg-indigo-600! hover:border-indigo-600! hover:text-white!
+    dark:hover:bg-indigo-600! dark:hover:border-indigo-600! dark:hover:text-white!"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -596,7 +739,7 @@ export default function AdminCompetitionGroups({
                   Xem &amp; xuất báo cáo thi đua tổ
                 </h3>
                 <p className="text-[11px] text-slate-400 m-0 mt-0.5">
-                  Tuần {weekLabel}
+                  {reportRangeLabel}
                 </p>
               </div>
               <button
@@ -608,23 +751,70 @@ export default function AdminCompetitionGroups({
               </button>
             </div>
 
-            <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="text-xs font-bold text-slate-600 shrink-0">
-                Nội dung:
-              </span>
-              <select
-                value={reportTab}
-                onChange={(e) =>
-                  setReportTab(
-                    e.target.value as "summary" | "members" | "bonus",
-                  )
-                }
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
-              >
-                <option value="summary">Tổng hợp theo tổ</option>
-                <option value="members">Chi tiết thành viên</option>
-                <option value="bonus">Lịch sử thưởng/phạt tổ</option>
-              </select>
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600 shrink-0 w-20">
+                  Nội dung:
+                </span>
+                <select
+                  value={reportTab}
+                  onChange={(e) =>
+                    setReportTab(
+                      e.target.value as "summary" | "members" | "bonus",
+                    )
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="summary">Tổng hợp theo tổ</option>
+                  <option value="members">Chi tiết thành viên</option>
+                  <option value="bonus">Lịch sử thưởng/phạt tổ</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600 shrink-0 w-20">
+                  Thời gian:
+                </span>
+                <select
+                  value={reportRange}
+                  onChange={(e) =>
+                    setReportRange(e.target.value as ReportRange)
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="thisWeek">Tuần này</option>
+                  <option value="lastWeek">Tuần trước</option>
+                  <option value="thisMonth">Tháng này</option>
+                  <option value="lastMonth">Tháng trước</option>
+                  <option value="all">Tất cả</option>
+                  <option value="custom">Tùy chọn khoảng ngày...</option>
+                </select>
+              </div>
+
+              {reportRange === "custom" && (
+                <div className="flex items-center gap-2">
+                  <span className="w-20 shrink-0" />
+                  <input
+                    type="date"
+                    value={customFrom}
+                    max={customTo || undefined}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-xs text-slate-400">đến</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    min={customFrom || undefined}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-400 m-0 pl-22">
+                Đang xem: {reportRangeLabel}
+              </p>
             </div>
 
             <div className="border border-slate-200 rounded-xl flex-1 overflow-auto">
@@ -634,10 +824,13 @@ export default function AdminCompetitionGroups({
                 </p>
               ) : (
                 <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
-                  <thead className="sticky top-0">
-                    <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-slate-100! text-slate-700! border-b border-slate-200">
                       {Object.keys(reportPreviewRows[0]).map((key) => (
-                        <th key={key} className="p-2.5 font-bold">
+                        <th
+                          key={key}
+                          className="p-2.5 font-bold bg-slate-100! text-slate-700! dark:bg-indigo-950! dark:text-indigo-200!"
+                        >
                           {key}
                         </th>
                       ))}
@@ -653,11 +846,7 @@ export default function AdminCompetitionGroups({
                           >
                             {typeof value === "number" &&
                             value > 0 &&
-                            [
-                              "Điểm",
-                              "Cộng/trừ tuần",
-                              "Thưởng/phạt tổ (tuần)",
-                            ].includes(key)
+                            SIGNED_KEYS.includes(key)
                               ? `+${value}`
                               : value}
                           </td>

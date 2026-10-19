@@ -71,6 +71,14 @@ type ReportLog = ActivityLogItem & {
   createdAt?: { toDate: () => Date } | null;
 };
 
+type ReportRange =
+  | "thisWeek"
+  | "lastWeek"
+  | "thisMonth"
+  | "lastMonth"
+  | "all"
+  | "custom";
+  
 interface ReportAttendance {
   studentId: string;
   name: string;
@@ -438,6 +446,10 @@ export default function AdminStudents({
   >("summary");
   const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
   const [reportAtt, setReportAtt] = useState<ReportAttendance[]>([]);
+
+  const [reportRange, setReportRange] = useState<ReportRange>("thisWeek");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   // State cho popup xác nhận xóa 1 học sinh
   const [confirmDeleteStudent, setConfirmDeleteStudent] =
@@ -892,6 +904,85 @@ export default function AdminStudents({
     }
   };
 
+  // ===== Lọc báo cáo theo mốc thời gian =====
+  const toDateKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const parseLocalDate = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const reportBounds = useMemo(() => {
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const mon = new Date(
+      weekMonday.getFullYear(),
+      weekMonday.getMonth(),
+      weekMonday.getDate(),
+    );
+    const endOf = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+    switch (reportRange) {
+      case "thisWeek":
+        return {
+          start: mon,
+          end: endOf(
+            new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6),
+          ),
+        };
+      case "lastWeek": {
+        const s = new Date(
+          mon.getFullYear(),
+          mon.getMonth(),
+          mon.getDate() - 7,
+        );
+        return {
+          start: s,
+          end: endOf(new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6)),
+        };
+      }
+      case "thisMonth":
+        return { start: new Date(y, m, 1), end: endOf(new Date(y, m + 1, 0)) };
+      case "lastMonth":
+        return { start: new Date(y, m - 1, 1), end: endOf(new Date(y, m, 0)) };
+      case "custom":
+        return {
+          start: customFrom ? parseLocalDate(customFrom) : null,
+          end: customTo ? endOf(parseLocalDate(customTo)) : null,
+        };
+      default:
+        return { start: null, end: null };
+    }
+  }, [reportRange, customFrom, customTo, today, weekMonday]);
+
+  const reportRangeLabel = useMemo(() => {
+    const { start, end } = reportBounds;
+    if (!start && !end) return "Toàn bộ thời gian";
+    return `${start ? formatDMY(start) : "..."} – ${end ? formatDMY(end) : "..."}`;
+  }, [reportBounds]);
+
+  const filteredReportLogs = useMemo(() => {
+    const { start, end } = reportBounds;
+    if (!start && !end) return reportLogs;
+    return reportLogs.filter((l) => {
+      const d = l.createdAt?.toDate?.();
+      if (!d) return false;
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
+    });
+  }, [reportLogs, reportBounds]);
+
+  const filteredReportAtt = useMemo(() => {
+    const { start, end } = reportBounds;
+    if (!start && !end) return reportAtt;
+    const s = start ? toDateKey(start) : "";
+    const e = end ? toDateKey(end) : "9999-12-31";
+    return reportAtt.filter((a) => a.date >= s && a.date <= e);
+  }, [reportAtt, reportBounds]);
+
   // Sheet 1: Tổng hợp theo học sinh
   const reportSummaryRows = useMemo(() => {
     const sorted = [...students].sort((a, b) => {
@@ -901,7 +992,7 @@ export default function AdminStudents({
     });
 
     return sorted.map((s, i) => {
-      const myLogs = reportLogs.filter(
+      const myLogs = filteredReportLogs.filter(
         (l) => l.name === s.name && l.type !== "attendance",
       );
       const plus = myLogs
@@ -910,7 +1001,7 @@ export default function AdminStudents({
       const minus = myLogs
         .filter((l) => l.delta < 0)
         .reduce((sum, l) => sum + l.delta, 0);
-      const myAtt = reportAtt.filter((a) => a.studentId === s.id);
+      const myAtt = filteredReportAtt.filter((a) => a.studentId === s.id);
       const countAtt = (st: string) =>
         myAtt.filter((a) => a.status === st).length;
 
@@ -929,7 +1020,7 @@ export default function AdminStudents({
         "Số buổi đi muộn": countAtt("late"),
       };
     });
-  }, [students, reportLogs, reportAtt, weeklyDeltaMap]);
+  }, [students, filteredReportLogs, filteredReportAtt, weeklyDeltaMap]);
 
   // Sheet 2: Lịch sử cộng/trừ điểm
   const reportPointRows = useMemo(() => {
@@ -937,7 +1028,7 @@ export default function AdminStudents({
     students.forEach((s) => {
       groupByName[s.name] = normalizeGroupName(s.group);
     });
-    return reportLogs
+    return filteredReportLogs
       .filter((l) => l.type !== "attendance")
       .map((l) => ({
         "Thời gian": l.createdAt?.toDate
@@ -948,12 +1039,12 @@ export default function AdminStudents({
         "Nội dung": l.label,
         Điểm: l.delta,
       }));
-  }, [students, reportLogs]);
+  }, [students, filteredReportLogs]);
 
   // Sheet 3: Lịch sử điểm danh (bỏ các buổi "Có mặt")
   const reportAttRows = useMemo(
     () =>
-      reportAtt
+      filteredReportAtt
         .filter((a) => a.status !== "present")
         .sort((a, b) => b.date.localeCompare(a.date))
         .map((a) => ({
@@ -963,7 +1054,7 @@ export default function AdminStudents({
           "Trạng thái": STATUS_META[a.status]?.label || a.status,
           "Lý do": a.reason || "",
         })),
-    [reportAtt],
+    [filteredReportAtt],
   );
 
   const reportPreviewRows: Record<string, string | number>[] =
@@ -1017,7 +1108,10 @@ export default function AdminStudents({
         "Lịch sử điểm danh",
       );
 
-      XLSX.writeFile(wb, `Bao-cao-hoc-sinh-${getTodayKey()}.xlsx`);
+      XLSX.writeFile(
+        wb,
+        `Bao-cao-hoc-sinh-${reportRange}-${getTodayKey()}.xlsx`,
+      );
       toast.success("Xuất file Excel thành công!");
       setReportOpen(false);
     } catch (error) {
@@ -1255,10 +1349,15 @@ export default function AdminStudents({
           </button>
 
           {/* Nút Xuất Excel báo cáo */}
+          {/* Nút Xuất Excel báo cáo */}
           <button
             type="button"
             onClick={handleOpenReport}
-            className="px-3.5 py-2 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            className="px-3.5 py-2 text-xs font-bold rounded-xl border transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap
+    bg-indigo-50! border-indigo-200! text-indigo-700!
+    dark:bg-indigo-950/50! dark:border-indigo-800! dark:text-indigo-300!
+    hover:bg-indigo-600! hover:border-indigo-600! hover:text-white!
+    dark:hover:bg-indigo-600! dark:hover:border-indigo-600! dark:hover:text-white!"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -1653,23 +1752,71 @@ export default function AdminStudents({
             </div>
 
             {/* Chọn nội dung xem trước */}
-            <div className="flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="text-xs font-bold text-slate-600 shrink-0">
-                Nội dung:
-              </span>
-              <select
-                value={reportTab}
-                onChange={(e) =>
-                  setReportTab(
-                    e.target.value as "summary" | "points" | "attendance",
-                  )
-                }
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
-              >
-                <option value="summary">Tổng hợp theo học sinh</option>
-                <option value="points">Lịch sử cộng/trừ điểm</option>
-                <option value="attendance">Lịch sử điểm danh</option>
-              </select>
+            {/* Chọn nội dung + mốc thời gian */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600 shrink-0 w-20">
+                  Nội dung:
+                </span>
+                <select
+                  value={reportTab}
+                  onChange={(e) =>
+                    setReportTab(
+                      e.target.value as "summary" | "points" | "attendance",
+                    )
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="summary">Tổng hợp theo học sinh</option>
+                  <option value="points">Lịch sử cộng/trừ điểm</option>
+                  <option value="attendance">Lịch sử điểm danh</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600 shrink-0 w-20">
+                  Thời gian:
+                </span>
+                <select
+                  value={reportRange}
+                  onChange={(e) =>
+                    setReportRange(e.target.value as ReportRange)
+                  }
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="thisWeek">Tuần này</option>
+                  <option value="lastWeek">Tuần trước</option>
+                  <option value="thisMonth">Tháng này</option>
+                  <option value="lastMonth">Tháng trước</option>
+                  <option value="all">Tất cả</option>
+                  <option value="custom">Tùy chọn khoảng ngày...</option>
+                </select>
+              </div>
+
+              {reportRange === "custom" && (
+                <div className="flex items-center gap-2">
+                  <span className="w-20 shrink-0" />
+                  <input
+                    type="date"
+                    value={customFrom}
+                    max={customTo || undefined}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-xs text-slate-400">đến</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    min={customFrom || undefined}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-400 m-0 pl-22">
+                Đang xem: {reportRangeLabel}
+              </p>
             </div>
 
             {/* Bảng xem trước */}
@@ -1684,10 +1831,13 @@ export default function AdminStudents({
                 </p>
               ) : (
                 <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
-                  <thead className="sticky top-0">
-                    <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-slate-100! text-slate-700! border-b border-slate-200">
                       {Object.keys(reportPreviewRows[0]).map((key) => (
-                        <th key={key} className="p-2.5 font-bold">
+                        <th
+                          key={key}
+                          className="p-2.5 font-bold bg-slate-100! text-slate-700! dark:bg-indigo-950! dark:text-indigo-200!"
+                        >
                           {key}
                         </th>
                       ))}
