@@ -594,11 +594,7 @@ export default function AdminCompetitionGroups({
             <button
               type="button"
               onClick={() => setReportOpen(true)}
-              className="px-3.5 py-2 text-xs font-bold rounded-xl border transition-all duration-300 shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap
-    bg-indigo-50! border-indigo-200! text-indigo-700!
-    dark:bg-indigo-950/50! dark:border-indigo-800! dark:text-indigo-300!
-    hover:bg-indigo-600! hover:border-indigo-600! hover:text-white!
-    dark:hover:bg-indigo-600! dark:hover:border-indigo-600! dark:hover:text-white!"
+              className="px-3.5 py-2 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
