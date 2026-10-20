@@ -122,6 +122,24 @@ type ReportRange =
 
 const SIGNED_KEYS = ["Điểm", "Cộng/trừ", "Thưởng/phạt tổ"];
 
+const REPORT_SIZE_CLASSES: Record<
+  "md" | "lg" | "full",
+  { wrapper: string; box: string }
+> = {
+  md: {
+    wrapper: "p-4",
+    box: "max-w-3xl max-h-[90vh]",
+  },
+  lg: {
+    wrapper: "p-4",
+    box: "max-w-6xl max-h-[92vh]",
+  },
+  full: {
+    wrapper: "p-0",
+    box: "max-w-none h-screen max-h-screen rounded-none!",
+  },
+};
+
 const formatDMY = (d: Date) =>
   `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
@@ -225,6 +243,13 @@ export default function AdminCompetitionGroups({
   const [reportRange, setReportRange] = useState<ReportRange>("thisWeek");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+
+  const [reportSize, setReportSize] = useState<"md" | "lg" | "full">("md");
+
+  const closeReport = () => {
+    setReportOpen(false);
+    setReportSize("md");
+  };
 
   // ===== Mốc thời gian của báo cáo =====
   const parseLocalDate = (s: string) => {
@@ -457,7 +482,7 @@ export default function AdminCompetitionGroups({
         `Bao-cao-thi-dua-to-${reportRange}-${getTodayKey()}.xlsx`,
       );
       toast.success("Xuất file Excel thành công!");
-      setReportOpen(false);
+      closeReport();
     } catch (error) {
       console.error("Lỗi xuất Excel:", error);
       toast.error("Không thể xuất file Excel.");
@@ -611,7 +636,7 @@ export default function AdminCompetitionGroups({
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <path d="m7 10 5 5 5-5" />
               </svg>
-              Xuất Excel báo cáo
+              Xem & xuất Excel báo cáo
             </button>
             <button
               onClick={() => handleOpenAddModal()}
@@ -727,9 +752,13 @@ export default function AdminCompetitionGroups({
       </div>
 
       {reportOpen && (
-        <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 space-y-4 shadow-xl border border-slate-100 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div
+          className={`fixed inset-0 z-9999 flex items-center justify-center bg-black/40 backdrop-blur-xs ${REPORT_SIZE_CLASSES[reportSize].wrapper}`}
+        >
+          <div
+            className={`bg-white rounded-3xl w-full p-6 space-y-4 shadow-xl border border-slate-100 flex flex-col transition-all duration-200 ${REPORT_SIZE_CLASSES[reportSize].box}`}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div>
                 <h3 className="font-bold text-slate-800 text-base m-0">
                   Xem &amp; xuất báo cáo thi đua tổ
@@ -738,16 +767,41 @@ export default function AdminCompetitionGroups({
                   {reportRangeLabel}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setReportOpen(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Chọn kích thước - ẩn trên điện thoại */}
+                <div className="hidden sm:flex items-center bg-slate-100 rounded-full p-0.5">
+                  {(
+                    [
+                      { key: "md", label: "Vừa" },
+                      { key: "lg", label: "Lớn" },
+                      { key: "full", label: "Toàn màn hình" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setReportSize(opt.key)}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-full transition-colors cursor-pointer whitespace-nowrap ${
+                        reportSize === opt.key
+                          ? "bg-white text-amber-700 shadow-2xs"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={closeReport}
+                  className="text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 shrink-0">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-600 shrink-0 w-20">
                   Nội dung:
@@ -813,7 +867,7 @@ export default function AdminCompetitionGroups({
               </p>
             </div>
 
-            <div className="border border-slate-200 rounded-xl flex-1 overflow-auto">
+            <div className="border border-slate-200 rounded-xl flex-1 min-h-0 overflow-auto">
               {reportPreviewRows.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-10">
                   Chưa có dữ liệu trong mục này.
@@ -854,18 +908,18 @@ export default function AdminCompetitionGroups({
               )}
             </div>
 
-            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3 shrink-0">
               <button
                 type="button"
                 onClick={handleExportReport}
                 disabled={reportSummaryRows.length === 0}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl cursor-pointer transition-all shadow-sm flex items-center gap-1.5"
               >
                 Tải file Excel (.xlsx)
               </button>
               <button
                 type="button"
-                onClick={() => setReportOpen(false)}
+                onClick={closeReport}
                 className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 transition-all shadow-2xs cursor-pointer"
               >
                 Đóng
