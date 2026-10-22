@@ -399,6 +399,9 @@ export default function AdminStudents({
   const [studentLogs, setStudentLogs] = useState<ActivityLogItem[]>([]);
   const [historyExpanded, setHistoryExpanded] = useState(false);
 
+  const [aiComment, setAiComment] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+
   const [sortBy, setSortBy] = usePersistentState(
     SORT_STORAGE_KEY,
     "name-asc",
@@ -438,6 +441,7 @@ export default function AdminStudents({
   const closeHistoryModal = () => {
     setHistoryModalStudent(null);
     setHistoryExpanded(false);
+    setAiComment("");
   };
 
   const closeStarModal = () => {
@@ -1255,6 +1259,56 @@ export default function AdminStudents({
     } finally {
       setUndoing(false);
       setConfirmUndoLog(null);
+    }
+  };
+
+  const handleGenerateAIComment = async () => {
+    if (!historyModalStudent) return;
+    setAiLoading(true);
+    setAiComment("");
+    try {
+      const pointLogs = studentLogs
+        .filter((l) => l.type !== "attendance")
+        .map((l) => {
+          const d = (
+            l.createdAt as { toDate?: () => Date } | null | undefined
+          )?.toDate?.();
+          return {
+            label: l.label,
+            delta: l.delta,
+            date: d ? formatDMY(d) : "",
+          };
+        });
+
+      const attendance = { absent: 0, late: 0, excused: 0 };
+      studentLogs.forEach((l) => {
+        if (l.type === "attendance" && l.status && l.status in attendance) {
+          attendance[l.status as keyof typeof attendance]++;
+        }
+      });
+
+      const weeklyDelta = weeklyDeltaMap[historyModalStudent.name] || 0;
+
+      const res = await fetch("/api/student-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weeklyScore: WEEKLY_BASE_POINTS + weeklyDelta,
+          weeklyDelta,
+          stars: historyModalStudent.stars || 0,
+          logs: pointLogs,
+          attendance,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.comment) throw new Error(data.error || "Lỗi");
+      setAiComment(data.comment);
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể tạo nhận xét AI, vui lòng thử lại!");
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -2800,6 +2854,44 @@ export default function AdminStudents({
                     </div>
                   );
                 })
+              )}
+            </div>
+
+            {/* Nhận xét AI */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleGenerateAIComment}
+                disabled={aiLoading || studentLogs.length === 0}
+                className="w-full px-3.5 py-2.5 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ✨{" "}
+                {aiLoading
+                  ? "AI đang viết nhận xét..."
+                  : aiComment
+                    ? "Tạo lại nhận xét"
+                    : "Nhận xét bằng AI"}
+              </button>
+
+              {aiComment && (
+                <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3 text-xs text-slate-700 leading-relaxed">
+                  <p className="m-0 font-bold text-indigo-700 mb-1">
+                    ✨ Nhận xét AI
+                  </p>
+                  <p className="m-0 whitespace-pre-wrap wrap-break-word">
+                    {aiComment}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(aiComment);
+                      toast.success("Đã sao chép nhận xét!");
+                    }}
+                    className="mt-2 text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    Sao chép
+                  </button>
+                </div>
               )}
             </div>
 
