@@ -435,6 +435,7 @@ export default function AdminStudents({
     null,
   );
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState("1");
 
   const [criteriaSearch, setCriteriaSearch] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
@@ -449,6 +450,7 @@ export default function AdminStudents({
     setStarModal(null);
     setSelectedCriteria(null);
     setQuantity(1);
+    setQuantityInput("1");
     setCriteriaSearch("");
     setIsExpanded(false);
   };
@@ -1332,6 +1334,12 @@ export default function AdminStudents({
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const updateQuantity = (n: number) => {
+    const safe = Math.min(99, Math.max(1, n));
+    setQuantity(safe);
+    setQuantityInput(String(safe));
   };
 
   return (
@@ -2588,7 +2596,7 @@ export default function AdminStudents({
                         key={item.id}
                         onClick={() => {
                           setSelectedCriteria(item);
-                          setQuantity(1);
+                          updateQuantity(1);
                         }}
                         className={`p-3 rounded-3xl border text-left flex flex-col justify-between transition hover:scale-[1.02] ${
                           starModal.type === "plus"
@@ -2649,27 +2657,35 @@ export default function AdminStudents({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      onClick={() => updateQuantity(quantity - 1)}
                       className="w-10 h-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-lg hover:bg-slate-200 transition-all flex items-center justify-center"
                     >
                       −
                     </button>
                     <input
-                      type="number"
-                      min={1}
-                      max={99}
-                      value={quantity}
+                      type="text"
+                      inputMode="numeric"
+                      value={quantityInput}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        setQuantity(
-                          isNaN(n) ? 1 : Math.min(99, Math.max(1, n)),
-                        );
+                        // Chỉ giữ lại chữ số, cho phép ô rỗng để người dùng gõ số mới
+                        const digits = e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 2);
+                        setQuantityInput(digits);
+                        const n = parseInt(digits, 10);
+                        if (!isNaN(n))
+                          setQuantity(Math.min(99, Math.max(1, n)));
+                      }}
+                      onBlur={() => {
+                        // Rời ô mà còn trống hoặc = 0 thì trả về 1
+                        updateQuantity(parseInt(quantityInput, 10) || 1);
                       }}
                       className="flex-1 h-10 px-3.5 text-center bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm font-bold focus:border-amber-400 focus:outline-none"
                     />
                     <button
                       type="button"
-                      onClick={() => setQuantity((q) => Math.min(99, q + 1))}
+                      onClick={() => updateQuantity(quantity + 1)}
                       className="w-10 h-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-lg hover:bg-slate-200 transition-all flex items-center justify-center"
                     >
                       +
@@ -2693,7 +2709,7 @@ export default function AdminStudents({
                     type="button"
                     onClick={() => {
                       setSelectedCriteria(null);
-                      setQuantity(1);
+                      updateQuantity(1);
                     }}
                     className="px-3.5 py-2 text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-200 hover:border-slate-200 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
                   >
@@ -2708,7 +2724,8 @@ export default function AdminStudents({
                         quantity,
                       )
                     }
-                    className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap"
+                    disabled={quantityInput === ""}
+                    className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Xác nhận
                   </button>
