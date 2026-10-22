@@ -34,6 +34,7 @@ import {
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
 import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
+import { API_BASE } from "@/lib/apiBase";
 
 interface StudentItem {
   id?: string;
@@ -1289,7 +1290,7 @@ export default function AdminStudents({
 
       const weeklyDelta = weeklyDeltaMap[historyModalStudent.name] || 0;
 
-      const res = await fetch("/api/student-comment", {
+      const res = await fetch(`${API_BASE}/api/student-comment`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

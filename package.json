@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:cap": "cross-env BUILD_TARGET=capacitor next build && npx cap sync"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -30,6 +31,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.5.4",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "postcss": "^8.5.26",

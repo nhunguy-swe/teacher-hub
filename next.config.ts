@@ -1,10 +1,12 @@
 import type { NextConfig } from "next";
 
+const isCapacitor = process.env.BUILD_TARGET === "capacitor";
+
 const nextConfig: NextConfig = {
-  output: "export", // Thêm dòng này để build ra các file tĩnh cho Capacitor
+  ...(isCapacitor ? { output: "export" as const } : {}),
   allowedDevOrigins: ["192.168.1.28"],
   images: {
-    unoptimized: true, // Bắt buộc phải có khi dùng output: "export" với thẻ next/image
+    unoptimized: true,
     remotePatterns: [
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },
     ],

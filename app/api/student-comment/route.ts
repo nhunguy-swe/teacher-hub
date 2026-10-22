@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const maxDuration = 30;
+
 interface LogInput {
   label: string;
   delta: number;
@@ -17,15 +19,25 @@ const MODELS = [
   "gemini-3-flash-preview",
 ];
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+const json = (data: unknown, status = 200) =>
+  NextResponse.json(data, { status, headers: corsHeaders });
+
 const num = (v: unknown) => (typeof v === "number" && isFinite(v) ? v : 0);
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
 
 export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json(
-      { error: "Thiếu GEMINI_API_KEY" },
-      { status: 500 },
-    );
+    return json({ error: "Thiếu GEMINI_API_KEY" }, 500);
   }
 
   try {
@@ -66,7 +78,7 @@ Lịch sử gần đây (mới nhất trước):
 ${logLines || "(chưa có)"}`;
 
     let text = "";
-    let partialText = ""; // bản dự phòng nếu mọi model đều bị cắt
+    let partialText = "";
     let lastError = "";
 
     for (const model of MODELS) {
@@ -98,7 +110,6 @@ ${logLines || "(chưa có)"}`;
       const candidate = data.candidates?.[0];
       const finishReason: string = candidate?.finishReason || "";
 
-      // Chỉ lấy phần trả lời thật, bỏ phần "suy nghĩ"
       const answer = ((candidate?.content?.parts || []) as GeminiPart[])
         .filter((p) => !p.thought)
         .map((p) => p.text || "")
@@ -117,7 +128,6 @@ ${logLines || "(chưa có)"}`;
         break;
       }
 
-      // Bị cắt (MAX_TOKENS...) -> lưu dự phòng và thử model khác
       partialText = partialText || answer;
       lastError = `${model} → bị cắt (finishReason=${finishReason})`;
     }
@@ -125,15 +135,12 @@ ${logLines || "(chưa có)"}`;
     if (!text) text = partialText;
 
     if (!text) {
-      return NextResponse.json(
-        { error: lastError || "AI trả về rỗng" },
-        { status: 502 },
-      );
+      return json({ error: lastError || "AI trả về rỗng" }, 502);
     }
 
-    return NextResponse.json({ comment: text });
+    return json({ comment: text });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Lỗi máy chủ" }, { status: 500 });
+    return json({ error: "Lỗi máy chủ" }, 500);
   }
 }
