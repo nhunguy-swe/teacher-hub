@@ -194,12 +194,61 @@ export default function AdminAttendance() {
   // Popup nhập lý do
   const [reasonModal, setReasonModal] = useState<{
     student: StudentItem;
-    status: "excused" | "absent" | "late";
+    status: "excused";
   } | null>(null);
   const [reasonText, setReasonText] = useState("");
   const [savingReason, setSavingReason] = useState(false);
 
   const todayKey = getTodayKey();
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  // Đặt lại toàn bộ học sinh về "Có mặt" cho hôm nay (gọi từ popup xác nhận)
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, "students"), orderBy("name", "asc")),
+      );
+      const today = getTodayKey();
+      const batch = writeBatch(db);
+
+      snap.docs.forEach((d) => {
+        const data = d.data();
+
+        batch.update(doc(db, "students", d.id), {
+          status: "present",
+          reason: "",
+          attendanceDate: today,
+        });
+
+        batch.set(
+          doc(db, "attendanceRecords", `${d.id}_${today}`),
+          {
+            studentId: d.id,
+            name: data.name || "",
+            group: data.group || "",
+            status: "present",
+            reason: "",
+            date: today,
+            month: today.slice(0, 7),
+            year: today.slice(0, 4),
+          },
+          { merge: true },
+        );
+      });
+
+      await batch.commit();
+      toast.success("Đã đặt lại tất cả học sinh về Có mặt!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể đặt lại điểm danh.");
+    } finally {
+      setIsRefreshing(false);
+      setConfirmReset(false);
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, "students"), orderBy("name", "asc"));
@@ -319,10 +368,9 @@ export default function AdminAttendance() {
           type: "attendance",
           status,
           reason,
-          label: `${STATUS_META[status].icon} ${STATUS_META[status].label} (${reason}) - ${todayKey
-            .split("-")
-            .reverse()
-            .join("/")}`,
+          label: `${STATUS_META[status].icon} ${STATUS_META[status].label}${
+            reason ? ` (${reason})` : ""
+          } - ${todayKey.split("-").reverse().join("/")}`,
           delta: 0,
           createdAt: serverTimestamp(),
         });
@@ -335,16 +383,16 @@ export default function AdminAttendance() {
     }
   };
 
-  // Bấm nút trạng thái
+  // Bấm nút trạng thái: chỉ "Có phép" mới bắt buộc nhập lý do
   const handleClickStatus = (s: StudentItem, status: string) => {
-    if (status === "present") {
-      saveAttendance(s, "present", "");
+    if (status !== "excused") {
+      saveAttendance(s, status, "");
       return;
     }
     setReasonText(s.status === status ? s.reason || "" : "");
     setReasonModal({
       student: s,
-      status: status as "excused" | "absent" | "late",
+      status: "excused",
     });
   };
 
@@ -611,28 +659,53 @@ export default function AdminAttendance() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowReportModal(true)}
-          className="px-3.5 py-2 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all shadow-2xs flex items-center gap-1.5"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="lucide lucide-download"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setConfirmReset(true)}
+            disabled={isRefreshing}
+            className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
           >
-            <path d="M12 15V3" />
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <path d="m7 10 5 5 5-5" />
-          </svg>{" "}
-          Xuất Excel báo cáo
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={isRefreshing ? "animate-spin" : ""}
+            >
+              <path d="M21 12a9 9 0 1 1-3-6.7" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            {isRefreshing ? "Đang đặt lại..." : "Đặt lại"}
+          </button>
+
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="px-3.5 py-2 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all shadow-2xs flex items-center gap-1.5"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-download"
+            >
+              <path d="M12 15V3" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m7 10 5 5 5-5" />
+            </svg>{" "}
+            Xuất Excel báo cáo
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -778,13 +851,7 @@ export default function AdminAttendance() {
               value={reasonText}
               onChange={(e) => setReasonText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleConfirmReason()}
-              placeholder={
-                reasonModal.status === "late"
-                  ? "VD: Kẹt xe, ngủ quên..."
-                  : reasonModal.status === "excused"
-                    ? "VD: Ốm, có việc gia đình..."
-                    : "VD: Không rõ lý do..."
-              }
+              placeholder="VD: Ốm, có việc gia đình..."
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none"
             />
 
@@ -807,6 +874,46 @@ export default function AdminAttendance() {
                 className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
               >
                 {savingReason ? "Đang lưu..." : "Lưu"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÁC NHẬN ĐẶT LẠI ĐIỂM DANH */}
+      {confirmReset && (
+        <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl">
+              🔄
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800">
+                Đặt lại điểm danh?
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Tất cả học sinh sẽ được đặt về{" "}
+                <strong className="text-slate-800">&quot;Có mặt&quot;</strong>{" "}
+                cho hôm nay. Các trạng thái Vắng / Có phép / Đi muộn đã chọn sẽ
+                bị xóa. Hành động này không thể hoàn tác.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmReset(false)}
+                disabled={isRefreshing}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-all shadow-2xs cursor-pointer disabled:opacity-50 flex items-center justify-center"
+              >
+                {isRefreshing ? "Đang đặt lại..." : "Đặt lại"}
               </button>
             </div>
           </div>
