@@ -34,6 +34,10 @@ const FlipIcon = () => (
 
 const FLIP_CARD_COUNT = 15;
 
+// Đặt ngoài component để tránh lỗi "impure function" của ESLint khi gọi lúc render
+const pickRandomCards = (list: StudentItem[]) =>
+  [...list].sort(() => Math.random() - 0.5).slice(0, FLIP_CARD_COUNT);
+
 export default function AdminLuckyFlipCard() {
   const toast = useToast();
   const meta = {
@@ -92,13 +96,27 @@ export default function AdminLuckyFlipCard() {
   const [selectedFlipIndex, setSelectedFlipIndex] = useState<number | null>(
     null,
   );
+
   // 1. Khai báo state cho flipPicks với giá trị khởi tạo ngẫu nhiên an toàn
-  const [flipPicks, setFlipPicks] = useState<StudentItem[]>(() => {
-    if (!activeStudents || activeStudents.length === 0) return [];
-    return [...activeStudents]
-      .sort(() => Math.random() - 0.5)
-      .slice(0, FLIP_CARD_COUNT);
-  });
+  const [flipPicks, setFlipPicks] = useState<StudentItem[]>(() =>
+    pickRandomCards(activeStudents),
+  );
+
+  // Đồng bộ lại 15 thẻ khi danh sách thay đổi (vd: học sinh vừa được điểm danh vắng).
+  // Không xáo khi đang quay / đang mở popup; đóng popup xong sẽ tự xáo.
+  const activeIdsKey = activeStudents.map((s) => s.id).join(",");
+  const [syncedKey, setSyncedKey] = useState(activeIdsKey);
+  if (
+    syncedKey !== activeIdsKey &&
+    !isFlippingProcess &&
+    !winnerPopup &&
+    !showPrivilegeScreen
+  ) {
+    setSyncedKey(activeIdsKey);
+    setFlipPicks(pickRandomCards(activeStudents));
+    setFlippedIdx(new Set());
+    setSelectedFlipIndex(null);
+  }
 
   // State cho popup xác nhận xóa lịch sử trúng thưởng của môn đang chọn
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
@@ -109,14 +127,7 @@ export default function AdminLuckyFlipCard() {
   // 2. Gom logic đổi môn học và xáo trộn thẻ vào đây (chạy trong event handler, tuân thủ tuyệt đối quy tắc Purity của React)
   const handleSubjectChange = (newSubject: string) => {
     setSelectedSubject(newSubject);
-    if (activeStudents && activeStudents.length > 0) {
-      const shuffled = [...activeStudents]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, FLIP_CARD_COUNT);
-      setFlipPicks(shuffled);
-    } else {
-      setFlipPicks([]);
-    }
+    setFlipPicks(pickRandomCards(activeStudents));
     setFlippedIdx(new Set());
     setSelectedFlipIndex(null);
   };
@@ -200,7 +211,8 @@ export default function AdminLuckyFlipCard() {
   ]);
 
   const handleDrawFlipCard = () => {
-    if (activeStudents.length === 0) return;
+    const pool = flipPicks.slice(0, FLIP_CARD_COUNT);
+    if (pool.length === 0) return;
     if (!beginDraw()) return;
 
     setIsFlippingProcess(true);
@@ -215,16 +227,14 @@ export default function AdminLuckyFlipCard() {
     const interval = setInterval(() => {
       currentStep++;
 
-      const randomBoxIdx = Math.floor(Math.random() * activeStudents.length);
+      const randomBoxIdx = Math.floor(Math.random() * pool.length);
       setSelectedFlipIndex(randomBoxIdx);
 
       if (currentStep >= maxSteps) {
         clearInterval(interval);
 
-        const finalStudentIndex = Math.floor(
-          Math.random() * activeStudents.length,
-        );
-        const selectedStudent = activeStudents[finalStudentIndex];
+        const finalStudentIndex = Math.floor(Math.random() * pool.length);
+        const selectedStudent = pool[finalStudentIndex];
 
         setSelectedFlipIndex(finalStudentIndex);
         setFlippedIdx(new Set([finalStudentIndex]));

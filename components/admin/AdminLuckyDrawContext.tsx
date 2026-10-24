@@ -8,6 +8,7 @@ import {
   useCallback,
   useRef,
   ReactNode,
+  useMemo,
 } from "react";
 import { db } from "@/lib/firebase";
 import {
@@ -73,6 +74,13 @@ interface LuckyDrawContextValue {
   beginDraw: () => boolean; // returns false if a draw is already in progress
   endDraw: () => void;
 }
+
+const getTodayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+};
 
 const LuckyDrawContext = createContext<LuckyDrawContextValue | null>(null);
 
@@ -208,7 +216,29 @@ export function LuckyDrawProvider({ children }: { children: ReactNode }) {
     [subjectsList],
   );
 
-  const activeStudents = activeStudentsBySubject[selectedSubject] || [];
+  // Học sinh vắng / có phép HÔM NAY => không tham gia quay dò bài
+  const absentIds = useMemo(() => {
+    const today = getTodayKey();
+    const set = new Set<string>();
+    students.forEach((s) => {
+      const st = s as StudentItem & {
+        status?: string;
+        attendanceDate?: string;
+      };
+      if (
+        (st.status === "absent" || st.status === "excused") &&
+        st.attendanceDate === today
+      ) {
+        set.add(st.id);
+      }
+    });
+    return set;
+  }, [students]);
+
+  const activeStudents = useMemo(() => {
+    const raw = activeStudentsBySubject[selectedSubject] || [];
+    return raw.filter((s) => !absentIds.has(s.id));
+  }, [activeStudentsBySubject, selectedSubject, absentIds]);
 
   const saveActiveList = useCallback((subject: string, list: StudentItem[]) => {
     setDoc(doc(db, "luckyDrawActiveList", subjectToDocId(subject)), {
