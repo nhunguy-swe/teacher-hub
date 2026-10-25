@@ -28,8 +28,10 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ToastProvider";
 import {
   buildWeeklyDeltaMap,
+  compareRank,
   getMonday,
   getSunday,
+  normalizeGroupName,
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
 import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
@@ -895,7 +897,7 @@ export default function AdminStatistics({
     () =>
       GROUPS.map((g) => {
         const membersWeekly = students
-          .filter((s) => s.group === g)
+          .filter((s) => normalizeGroupName(s.group) === g)
           .reduce(
             (a, s) => a + WEEKLY_BASE_POINTS + (weeklyDeltaMap[s.name] || 0),
             0,
@@ -916,7 +918,12 @@ export default function AdminStatistics({
           weeklyDelta: weeklyDeltaMap[s.name] || 0,
           weeklyScore: WEEKLY_BASE_POINTS + (weeklyDeltaMap[s.name] || 0),
         }))
-        .sort((a, b) => b.weeklyScore - a.weeklyScore),
+        .sort((a, b) =>
+          compareRank(
+            { name: a.name, score: a.weeklyScore, stars: a.stars || 0 },
+            { name: b.name, score: b.weeklyScore, stars: b.stars || 0 },
+          ),
+        ),
     [students, weeklyDeltaMap],
   );
   const topThreeStudents = rankedStudents.slice(0, 3);
@@ -2056,14 +2063,14 @@ export default function AdminStatistics({
                           <div className="flex flex-wrap items-center gap-1.5 mt-1">
                             <span
                               className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                GROUP_BADGE_STYLES[s.group]?.badgeBg ||
-                                "bg-slate-50"
-                              } ${GROUP_BADGE_STYLES[s.group]?.badgeText || "text-slate-600"} ${
-                                GROUP_BADGE_STYLES[s.group]?.badgeBorder ||
-                                "border-slate-200"
+                                GROUP_BADGE_STYLES[normalizeGroupName(s.group)]
+                                  ?.badgeBg || "bg-slate-50"
+                              } ${GROUP_BADGE_STYLES[normalizeGroupName(s.group)]?.badgeText || "text-slate-600"} ${
+                                GROUP_BADGE_STYLES[normalizeGroupName(s.group)]
+                                  ?.badgeBorder || "border-slate-200"
                               }`}
                             >
-                              {s.group || "Tổ 1"}
+                              {normalizeGroupName(s.group)}
                             </span>
                             {s.position &&
                               !HIDDEN_POSITION_TAGS.includes(s.position) && (
