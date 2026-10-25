@@ -117,6 +117,9 @@ export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
 
+  // Xem ảnh to (lưu vị trí trong danh sách đang hiển thị)
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+
   useEffect(() => {
     const q = query(collection(db, "gallery"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -137,6 +140,46 @@ export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
       result.sort((a, b) => b.title.localeCompare(a.title));
     return result;
   }, [gallery, search, sortBy]);
+
+  const previewItem = previewIndex !== null ? filtered[previewIndex] : null;
+
+  const goPrev = () =>
+    setPreviewIndex((i) =>
+      i === null || filtered.length === 0
+        ? null
+        : (i - 1 + filtered.length) % filtered.length,
+    );
+  const goNext = () =>
+    setPreviewIndex((i) =>
+      i === null || filtered.length === 0 ? null : (i + 1) % filtered.length,
+    );
+
+  // Phím tắt: Esc đóng, ← → chuyển ảnh
+  useEffect(() => {
+    if (previewIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewIndex(null);
+      else if (e.key === "ArrowLeft") goPrev();
+      else if (e.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewIndex, filtered.length]);
+
+  const handleDownload = (item: GalleryItem) => {
+    const mime = item.imageUrl.match(/^data:image\/(\w+)/)?.[1] ?? "jpeg";
+    const ext = mime === "jpeg" ? "jpg" : mime;
+    const safeName =
+      item.title.replace(/[\\/:*?"<>|]/g, "").trim() || "anh-ky-niem";
+
+    const a = document.createElement("a");
+    a.href = item.imageUrl;
+    a.download = `${safeName}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   // Chọn nhiều ảnh từ máy
   const handleFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,13 +409,19 @@ export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
             placeholder="Tìm kiếm ảnh theo tiêu đề..."
             className={searchCls}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPreviewIndex(null);
+            }}
           />
         </div>
         <select
           className={selectCls}
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
+          onChange={(e) => {
+            setSortBy(e.target.value);
+            setPreviewIndex(null);
+          }}
         >
           <option value="newest">Mới đăng nhất</option>
           <option value="title-asc">Tiêu đề (A → Z)</option>
@@ -389,18 +438,21 @@ export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
               : "Không tìm thấy ảnh phù hợp."}
           </p>
         ) : (
-          filtered.map((item) => (
+          filtered.map((item, index) => (
             <div
               key={item.id}
               className="min-w-0 bg-white p-6 rounded-3xl border border-sky-100 shadow-lg shadow-sky-900/5 space-y-4 flex flex-col justify-between transition-all hover:shadow-xl"
             >
               <div className="flex flex-col items-center text-center space-y-3 min-w-0">
-                <div className="w-full aspect-4/3 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100">
+                <div
+                  onClick={() => setPreviewIndex(index)}
+                  className="w-full aspect-4/3 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 cursor-zoom-in group"
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={item.imageUrl}
                     alt={item.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 </div>
                 <h4 className="font-extrabold text-slate-800 text-base m-0 line-clamp-2 w-full min-w-0 break-all">
@@ -786,6 +838,96 @@ export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
                   : `Xóa ${selectedIds.length} ảnh`}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX XEM ẢNH TO */}
+      {previewItem && (
+        <div
+          className="fixed inset-0 z-70 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewIndex(null)}
+        >
+          {/* Thanh công cụ */}
+          <div
+            className="absolute top-4 right-4 flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => handleDownload(previewItem)}
+              className="px-4 py-2 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v12M12 15l-4-4M12 15l4-4" />
+                <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+              </svg>
+              Tải xuống
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewIndex(null)}
+              className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/30 text-white font-bold flex items-center justify-center transition-colors cursor-pointer"
+              title="Đóng (Esc)"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Nút trước / sau */}
+          {filtered.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goPrev();
+                }}
+                className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 hover:bg-white/30 text-white text-xl flex items-center justify-center transition-colors cursor-pointer"
+                title="Ảnh trước"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goNext();
+                }}
+                className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/15 hover:bg-white/30 text-white text-xl flex items-center justify-center transition-colors cursor-pointer"
+                title="Ảnh sau"
+              >
+                ›
+              </button>
+            </>
+          )}
+
+          {/* Ảnh + tiêu đề */}
+          <div
+            className="flex flex-col items-center gap-3 max-w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewItem.imageUrl}
+              alt={previewItem.title}
+              className="max-w-[92vw] max-h-[80vh] object-contain rounded-2xl shadow-2xl"
+            />
+            <p className="text-white font-bold text-sm m-0 text-center">
+              {previewItem.title}
+              <span className="text-white/60 font-medium ml-2">
+                ({(previewIndex ?? 0) + 1}/{filtered.length})
+              </span>
+            </p>
           </div>
         </div>
       )}
