@@ -65,3 +65,23 @@ export function weeklyScoreOf(
 ) {
   return WEEKLY_BASE_POINTS + (deltaMap[studentName] || 0);
 }
+
+export function compareRank(
+  a: { name: string; score: number; stars: number },
+  b: { name: string; score: number; stars: number },
+) {
+  if (b.score !== a.score) return b.score - a.score; // điểm tuần cao hơn đứng trên
+  if (b.stars !== a.stars) return b.stars - a.stars; // hòa -> ⭐ tích lũy cao hơn đứng trên
+  return a.name.localeCompare(b.name, "vi"); // vẫn hòa -> theo tên A→Z
+}
+
+// Chuẩn hóa tên tổ: "tổ 2", "Tổ 2 ", "2" -> "Tổ 2". Không có/không hợp lệ -> "Tổ 1"
+export function normalizeGroupName(groupName?: string) {
+  if (!groupName) return "Tổ 1";
+  const match = groupName.match(/\d+/);
+  if (match) {
+    const num = parseInt(match[0], 10);
+    if (num >= 1 && num <= 3) return `Tổ ${num}`;
+  }
+  return "Tổ 1";
+}

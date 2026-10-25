@@ -16,8 +16,10 @@ import {
 } from "firebase/firestore";
 import {
   buildWeeklyDeltaMap,
+  compareRank,
   getMonday,
   getSunday,
+  normalizeGroupName,
   WEEKLY_BASE_POINTS,
 } from "@/lib/weeklyScore";
 
@@ -248,18 +250,6 @@ const TARGET_LABELS: Record<
   student: { label: "Học sinh", Icon: UserIcon },
   team: { label: "Tổ", Icon: UsersIcon },
   both: { label: "Học sinh & Tổ", Icon: TargetIcon },
-};
-
-const normalizeGroupName = (groupName?: string) => {
-  if (!groupName) return "Tổ 1";
-  const match = groupName.match(/\d+/);
-  if (match) {
-    const num = parseInt(match[0]);
-    if (num >= 1 && num <= 3) {
-      return `Tổ ${num}`;
-    }
-  }
-  return "Tổ 1";
 };
 
 // Dữ liệu cũ có thể chưa có targetType (trước đây dùng minRank) -> mặc định "both"
@@ -493,7 +483,12 @@ export default function AdminPrivileges() {
         weeklyDelta: weeklyDeltaMap[s.name] || 0,
         weeklyScore: WEEKLY_BASE_POINTS + (weeklyDeltaMap[s.name] || 0),
       }))
-      .sort((a, b) => b.weeklyScore - a.weeklyScore)
+      .sort((a, b) =>
+        compareRank(
+          { name: a.name, score: a.weeklyScore, stars: a.stars || 0 },
+          { name: b.name, score: b.weeklyScore, stars: b.stars || 0 },
+        ),
+      )
       .slice(0, 3);
   }, [students, weeklyDeltaMap]);
 

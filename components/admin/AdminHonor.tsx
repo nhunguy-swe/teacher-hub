@@ -15,6 +15,7 @@ import {
 } from "firebase/firestore";
 import * as XLSX from "xlsx";
 import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
+import { compareRank } from "@/lib/weeklyScore";
 
 interface StudentItem {
   id: string;
@@ -162,15 +163,6 @@ function extractReason(label: string) {
   const m = label.match(/\((.*)\)\s*$/);
   const reason = m ? m[1] : label;
   return reason.replace(/\s*x\d+$/i, "").trim();
-}
-
-function compareRank(
-  a: { name: string; score: number; stars: number },
-  b: { name: string; score: number; stars: number },
-) {
-  if (b.score !== a.score) return b.score - a.score; // điểm tuần/tháng/kỳ
-  if (b.stars !== a.stars) return b.stars - a.stars; // hòa -> điểm tích lũy cao hơn đứng trên
-  return a.name.localeCompare(b.name, "vi");
 }
 
 function aggregateWeeks(
