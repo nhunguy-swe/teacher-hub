@@ -37,6 +37,56 @@ const searchCls =
 const selectCls =
   "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none";
 
+const MAX_DOC_BYTES = 900_000; // chừa dư so với giới hạn 1 MiB
+
+function compressImage(
+  file: File,
+  maxSize = 1280,
+  quality = 0.7,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const scale = Math.min(1, maxSize / Math.max(width, height));
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Không tạo được canvas"));
+
+      // Nền trắng cho ảnh PNG trong suốt
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let q = quality;
+      let dataUrl = canvas.toDataURL("image/jpeg", q);
+      // Nếu vẫn quá lớn thì giảm dần chất lượng
+      while (dataUrl.length > MAX_DOC_BYTES && q > 0.3) {
+        q -= 0.1;
+        dataUrl = canvas.toDataURL("image/jpeg", q);
+      }
+      if (dataUrl.length > MAX_DOC_BYTES) {
+        return reject(new Error("Ảnh quá lớn sau khi nén"));
+      }
+      resolve(dataUrl);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Không đọc được file ảnh"));
+    };
+    img.src = url;
+  });
+}
+
 export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
   const toast = useToast();
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -93,39 +143,50 @@ export default function AdminGallery({ onAdded }: { onAdded: () => void }) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    setLoading(true);
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
+    const fileList = Array.from(files);
+    e.target.value = "";
 
-        const finalTitle = titlePrefix.trim()
-          ? files.length > 1
-            ? `${titlePrefix.trim()} (${i + 1})`
-            : titlePrefix.trim()
-          : file.name.split(".")[0];
+    setLoading(true);
+    let success = 0;
+    const failed: string[] = [];
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      try {
+        const base64 = await compressImage(file);
+
+        const baseName = file.name.replace(/\.[^/.]+$/, "");
+        const prefix = titlePrefix.trim();
+        const finalTitle = prefix
+          ? fileList.length > 1
+            ? `${prefix} (${i + 1})`
+            : prefix
+          : baseName;
 
         await addDoc(collection(db, "gallery"), {
           title: finalTitle,
           imageUrl: base64,
           createdAt: serverTimestamp(),
         });
+        success++;
+      } catch (err) {
+        console.error(`Lỗi ảnh "${file.name}":`, err);
+        failed.push(file.name);
       }
-      toast.success(`Đã tải lên thành công ${files.length} ảnh!`);
+    }
+
+    if (success > 0) {
+      toast.success(`Đã tải lên thành công ${success}/${fileList.length} ảnh!`);
+      onAdded();
+    }
+    if (failed.length > 0) {
+      toast.error(`Không tải được: ${failed.join(", ")}`);
+    }
+    if (failed.length === 0) {
       setTitlePrefix("");
       setAddModalOpen(false);
-      onAdded();
-    } catch (err) {
-      console.error(err);
-      toast.error("Lỗi khi tải ảnh lên.");
-    } finally {
-      setLoading(false);
-      e.target.value = "";
     }
+    setLoading(false);
   };
 
   const handleUpdate = async () => {
