@@ -42,6 +42,7 @@ interface WeeklyStudentRow {
   weeklyScore: number;
   rank: number;
   avatarUrl?: string;
+  stars?: number;
 }
 
 interface WeeklyReportDoc {
@@ -163,7 +164,19 @@ function extractReason(label: string) {
   return reason.replace(/\s*x\d+$/i, "").trim();
 }
 
-function aggregateWeeks(weeks: WeeklyReportDoc[]): AggregatedRow[] {
+function compareRank(
+  a: { name: string; score: number; stars: number },
+  b: { name: string; score: number; stars: number },
+) {
+  if (b.score !== a.score) return b.score - a.score; // điểm tuần/tháng/kỳ
+  if (b.stars !== a.stars) return b.stars - a.stars; // hòa -> điểm tích lũy cao hơn đứng trên
+  return a.name.localeCompare(b.name, "vi");
+}
+
+function aggregateWeeks(
+  weeks: WeeklyReportDoc[],
+  starsByName: Record<string, number> = {},
+): AggregatedRow[] {
   const map: Record<string, AggregatedRow> = {};
   weeks.forEach((w) => {
     w.students.forEach((s) => {
@@ -181,7 +194,12 @@ function aggregateWeeks(weeks: WeeklyReportDoc[]): AggregatedRow[] {
       map[s.name].group = s.group;
     });
   });
-  const list = Object.values(map).sort((a, b) => b.totalDelta - a.totalDelta);
+  const list = Object.values(map).sort((a, b) =>
+    compareRank(
+      { name: a.name, score: a.totalDelta, stars: starsByName[a.name] || 0 },
+      { name: b.name, score: b.totalDelta, stars: starsByName[b.name] || 0 },
+    ),
+  );
   return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
 }
 
@@ -324,10 +342,16 @@ export default function AdminHonor() {
         delta,
         weeklyScore: WEEKLY_BASE_POINTS + delta,
         avatarUrl: s.avatarUrl,
+        stars: s.stars || 0,
       };
     });
 
-    list.sort((a, b) => b.weeklyScore - a.weeklyScore);
+    list.sort((a, b) =>
+      compareRank(
+        { name: a.name, score: a.weeklyScore, stars: a.stars },
+        { name: b.name, score: b.weeklyScore, stars: b.stars },
+      ),
+    );
     return list.map((item, idx) => ({ ...item, rank: idx + 1 }));
   };
 
@@ -408,11 +432,29 @@ export default function AdminHonor() {
     [selectedMonday, selectedSunday, students, activityLogs],
   );
 
-  const weekRows: WeeklyStudentRow[] = isCurrentWeek
+  const starsByName = useMemo(() => {
+    const m: Record<string, number> = {};
+    students.forEach((s) => {
+      m[s.name] = s.stars || 0;
+    });
+    return m;
+  }, [students]);
+
+  const rawWeekRows: WeeklyStudentRow[] = isCurrentWeek
     ? liveScored
     : savedReport
       ? savedReport.students
       : liveScored;
+
+  const weekRows: WeeklyStudentRow[] = rawWeekRows
+    .map((s) => ({ ...s, stars: s.stars ?? starsByName[s.name] ?? 0 }))
+    .sort((a, b) =>
+      compareRank(
+        { name: a.name, score: a.weeklyScore, stars: a.stars },
+        { name: b.name, score: b.weeklyScore, stars: b.stars },
+      ),
+    )
+    .map((s, idx) => ({ ...s, rank: idx + 1 }));
 
   const filteredWeekRows = weekRows.filter((s) =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -509,8 +551,9 @@ export default function AdminHonor() {
         combinedWeeks.filter(
           (w) => monthKeyOf(w.weekStart) === reportMonthValue,
         ),
+        starsByName,
       ),
-    [combinedWeeks, reportMonthValue],
+    [combinedWeeks, reportMonthValue, starsByName],
   );
 
   const handleOpenReportModal = () => {
@@ -586,15 +629,33 @@ export default function AdminHonor() {
         total: 100 + delta,
       };
     });
-    rows.sort((a, b) => b.total - a.total);
+    rows.sort((a, b) =>
+      compareRank(
+        { name: a.name, score: a.total, stars: starsByName[a.name] || 0 },
+        { name: b.name, score: b.total, stars: starsByName[b.name] || 0 },
+      ),
+    );
     return rows.map((r, idx) => ({ ...r, rank: idx + 1 }));
-  }, [isTermPeriod, termWeekRanges, students, activityLogs]);
+  }, [isTermPeriod, termWeekRanges, students, activityLogs, starsByName]);
 
   const previewRows = useMemo<PreviewRow[]>(() => {
     if (reportPeriod === "week") {
       if (!weekReportData) return [];
       return [...weekReportData.students]
-        .sort((a, b) => b.weeklyScore - a.weeklyScore)
+        .sort((a, b) =>
+          compareRank(
+            {
+              name: a.name,
+              score: a.weeklyScore,
+              stars: a.stars ?? starsByName[a.name] ?? 0,
+            },
+            {
+              name: b.name,
+              score: b.weeklyScore,
+              stars: b.stars ?? starsByName[b.name] ?? 0,
+            },
+          ),
+        )
         .map((s, idx) => ({
           rank: idx + 1,
           name: s.name,
@@ -613,7 +674,13 @@ export default function AdminHonor() {
       }));
     }
     return termPreviewRows;
-  }, [reportPeriod, weekReportData, monthAggregated, termPreviewRows]);
+  }, [
+    reportPeriod,
+    weekReportData,
+    monthAggregated,
+    termPreviewRows,
+    starsByName,
+  ]);
 
   const previewDeltaLabel =
     reportPeriod === "week"
