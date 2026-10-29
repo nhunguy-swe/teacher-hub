@@ -769,6 +769,7 @@ export default function AdminStatistics({
     "section-spin": "/admin/lucky-spin",
     "section-drawcard": "/admin/lucky-drawcard",
     "section-flipcard": "/admin/lucky-flipcard",
+    "section-namepicker": "/admin/lucky-namepicker",
     "section-games": "/admin/games",
     "section-materials": "/admin/materials",
     "section-gallery": "/admin/gallery",
