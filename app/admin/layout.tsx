@@ -451,6 +451,32 @@ const MENU_ITEMS: MenuNode[] = [
               </svg>
             ),
           },
+          {
+            id: "section-namepicker",
+            label: "Chọn nhóm",
+            path: "/admin/lucky-namepicker",
+            icon: (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="lucide lucide-users-collaboration preview-icon"
+              >
+                <path d="M12.925 3.047a9 9 0 017.616 6.11" />
+                <path d="M13 22a2 2 0 012-2h4a2 2 0 012 2" />
+                <path d="M3 12a2 2 0 012-2h4a2 2 0 012 2" />
+                <path d="M3.889 15.9a9 9 0 005.247 4.632" />
+                <circle cx="17" cy="14" r="2" />
+                <circle cx="7" cy="4" r="2" />
+              </svg>
+            ),
+          },
         ],
       },
       {

@@ -59,6 +59,7 @@ interface LuckyDrawContextValue {
   // Active (still-eligible) students for the currently selected subject
   activeStudents: StudentItem[];
   removeStudentFromActive: (studentId: string) => void;
+  removeStudentsFromActive: (studentIds: string[]) => void;
   addManualNames: (rawNames: string) => void;
   fetchDbStudents: () => void;
   resetList: () => void;
@@ -256,6 +257,18 @@ export function LuckyDrawProvider({ children }: { children: ReactNode }) {
     [selectedSubject, activeStudentsBySubject, saveActiveList],
   );
 
+  const removeStudentsFromActive = useCallback(
+    (studentIds: string[]) => {
+      const toRemove = new Set(studentIds);
+      const currentList = activeStudentsBySubject[selectedSubject] || [];
+      saveActiveList(
+        selectedSubject,
+        currentList.filter((s) => !toRemove.has(s.id)),
+      );
+    },
+    [selectedSubject, activeStudentsBySubject, saveActiveList],
+  );
+
   const addManualNames = useCallback(
     (rawNames: string) => {
       if (!rawNames.trim()) return;
@@ -407,6 +420,7 @@ export function LuckyDrawProvider({ children }: { children: ReactNode }) {
     deleteSubject,
     activeStudents,
     removeStudentFromActive,
+    removeStudentsFromActive,
     addManualNames,
     fetchDbStudents,
     resetList,
