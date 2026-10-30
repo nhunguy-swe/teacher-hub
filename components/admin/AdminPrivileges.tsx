@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/components/ToastProvider";
 import {
@@ -579,6 +579,19 @@ export default function AdminPrivileges() {
   );
   const [isFlipped, setIsFlipped] = useState(false);
 
+  const spinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spinningRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      if (flipTimerRef.current) clearTimeout(flipTimerRef.current);
+      stopActiveTick();
+      spinningRef.current = false;
+    };
+  }, []);
+
   const [showAllModal, setShowAllModal] = useState(false);
   const [showAllHistoryModal, setShowAllHistoryModal] = useState(false);
 
@@ -608,65 +621,66 @@ export default function AdminPrivileges() {
   };
 
   const handleStartSpin = () => {
-    if (isSpinning || eligiblePrivileges.length === 0 || !activeRecipient)
+    if (
+      spinningRef.current ||
+      eligiblePrivileges.length === 0 ||
+      !activeRecipient
+    )
       return;
+    spinningRef.current = true;
 
-    // Mở khóa AudioContext ngay trong cú bấm chuột
+    const prizes = eligiblePrivileges;
+    const recipient = activeRecipient;
+
     const ctx = getAudioCtx();
     if (ctx && ctx.state === "suspended") void ctx.resume();
 
     setIsSpinning(true);
-
-    setIsSpinning(true);
-    setWonPrivilege(null);
-    setFinalWinningIndex(null);
     setIsFlipped(false);
+    setFinalWinningIndex(null);
 
     let currentStep = 0;
+    let prevIdx = -1;
     const totalSteps = 24 + Math.floor(Math.random() * 8);
     let speed = 50;
 
     const runSpin = () => {
-      const randomIdx = Math.floor(Math.random() * 8);
+      let randomIdx: number;
+      do {
+        randomIdx = Math.floor(Math.random() * 8);
+      } while (randomIdx === prevIdx);
+      prevIdx = randomIdx;
+
       setHighlightedIndex(randomIdx);
       currentStep++;
 
       if (currentStep < totalSteps) {
-        // tiếng không dài quá khoảng cách tới bước kế tiếp -> không chồng, không tạp âm
         playSound(SOUND_TICK, 0.5, {
           isTick: true,
           maxDuration: Math.min(0.15, (speed + 12) / 1000),
         });
         speed += 12;
-        setTimeout(runSpin, speed);
+        spinTimerRef.current = setTimeout(runSpin, speed);
       } else {
-        const finalIdx = randomIdx;
-        setFinalWinningIndex(finalIdx);
-        setHighlightedIndex(finalIdx);
-
-        const finalPrize = getRandomItem(eligiblePrivileges);
+        const finalPrize = getRandomItem(prizes);
+        setFinalWinningIndex(randomIdx);
         setWonPrivilege(finalPrize);
         setIsSpinning(false);
+        spinningRef.current = false;
 
-        stopActiveTick(); // cắt tick cuối trước khi phát tiếng trúng thưởng
-        playSound(SOUND_WIN, 0.8); // phát luôn, không đợi 150ms để khớp lúc thẻ bắt đầu lật
+        stopActiveTick();
+        playSound(SOUND_WIN, 0.8);
+        flipTimerRef.current = setTimeout(() => setIsFlipped(true), 150);
 
-        setTimeout(() => {
-          setIsFlipped(true);
-        }, 150);
-
-        // Ghi lịch sử thật vào activityLog (dùng chung với lịch sử điểm sao/tổ)
         addDoc(collection(db, "activityLog"), {
-          name: activeRecipient.name,
+          name: recipient.name,
           label:
-            activeRecipient.kind === "team"
+            recipient.kind === "team"
               ? `🎁 Tổ nhận đặc quyền: ${finalPrize.title}`
               : `🎁 Trúng đặc quyền: ${finalPrize.title}`,
           delta: 0,
           createdAt: serverTimestamp(),
-        }).catch(() => {
-          toast.error("Không thể lưu lịch sử bốc thăm");
-        });
+        }).catch(() => toast.error("Không thể lưu lịch sử bốc thăm"));
       }
     };
 
@@ -1190,8 +1204,9 @@ export default function AdminPrivileges() {
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full shadow-xl border border-[#EFE8D8] text-center relative">
             <button
-              onClick={() => setShowDrawModal(false)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+              onClick={() => !isSpinning && setShowDrawModal(false)}
+              disabled={isSpinning}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               ✕
             </button>
