@@ -9,6 +9,7 @@ import { LuckyDrawProvider } from "@/components/admin/AdminLuckyDrawContext";
 import Link from "next/link";
 import "../admin.css";
 import DailyReminder from "@/components/admin/DailyReminder";
+import { useAdminAvatar } from "@/lib/adminAvatar";
 
 /* ------------------------------------------------------------------ */
 /* Kiểu dữ liệu & cấu hình menu                                        */
@@ -153,6 +154,26 @@ const MENU_ITEMS: MenuNode[] = [
           >
             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
             <circle cx="9" cy="7" r="4" />
+          </svg>
+        ),
+      },
+      {
+        id: "section-semester",
+        label: "Học kỳ",
+        path: "/admin/semester",
+        icon: (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+            <path d="M6 12v5c3 3 9 3 12 0v-5" />
           </svg>
         ),
       },
@@ -613,6 +634,23 @@ const findActiveItem = (
   return null;
 };
 
+// Trả về chuỗi nhãn từ cấp ngoài cùng tới trang đang xem, vd: ["Quản lý lớp học", "Học sinh"]
+const findTrail = (
+  items: MenuNode[],
+  pathname: string,
+  trail: string[] = [],
+): string[] | null => {
+  for (const it of items) {
+    const next = [...trail, it.label];
+    if (matchPath(it.path, pathname)) return next;
+    if (it.children) {
+      const found = findTrail(it.children, pathname, next);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
 // Nhóm có chứa trang đang xem không (để tự mở nhóm đó)
 const containsActive = (node: MenuNode, pathname: string): boolean =>
   !!node.children?.some(
@@ -765,6 +803,231 @@ function LoadingScreen() {
   );
 }
 
+function AdminHeader({
+  user,
+  trail,
+  loggingOut,
+  onLogout,
+}: {
+  user: User | null;
+  trail: string[];
+  loggingOut: boolean;
+  onLogout: () => void;
+}) {
+  const [now, setNow] = useState(() => new Date());
+  const avatar = useAdminAvatar(user?.uid);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const dateText = now.toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const timeText = now.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const initial = user?.email?.[0]?.toUpperCase() ?? "A";
+
+  return (
+    <header className="relative z-40 w-full">
+      <div className="relative overflow-hidden rounded-3xl border border-amber-200 bg-linear-to-br from-amber-50 via-white to-amber-100/60 shadow-lg shadow-amber-950/5 dark:via-[#161f33]">
+        {/* Họa tiết nhẹ */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, #fcd34d 1px, transparent 0)",
+            backgroundSize: "22px 22px",
+            maskImage: "linear-gradient(to left, black, transparent 60%)",
+            WebkitMaskImage: "linear-gradient(to left, black, transparent 60%)",
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-amber-300/30 blur-3xl"
+        />
+
+        <div className="relative px-4 py-3.5 sm:px-6 sm:py-5">
+          {/* Hàng trên */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-amber-400 to-[#f59e0b] text-white shadow-md shadow-amber-500/30 sm:h-14 sm:w-14">
+                <svg
+                  width="26"
+                  height="26"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3L2 8l10 5 10-5-10-5z" />
+                  <path d="M2 12l10 5 10-5" />
+                  <path d="M2 8v6" />
+                </svg>
+              </div>
+
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-2xl">
+                  Teacher Hub
+                </h1>
+                <p className="hidden truncate text-xs font-medium text-slate-500 lg:block">
+                  Quản lý thời khóa biểu, thông báo, tài liệu, trò chơi và hình
+                  ảnh lớp học
+                </p>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Chip tài khoản */}
+              <div className="hidden items-center gap-2 rounded-full border border-amber-200 bg-white py-1 pl-1 pr-4 shadow-sm md:flex">
+                <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-amber-100 text-sm font-extrabold text-amber-700 ring-2 ring-amber-300">
+                  {avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatar}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    initial
+                  )}
+                </span>
+                <div className="leading-tight">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                    Quản trị viên
+                  </p>
+                  <p className="max-w-40 truncate text-xs font-semibold text-slate-700">
+                    {user?.email ?? "admin"}
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href="/"
+                title="Xem trang chủ"
+                className="flex items-center gap-1.5 rounded-full border border-amber-200 bg-white px-3 py-2 text-xs font-bold text-amber-800 shadow-sm transition-all hover:bg-amber-50 sm:px-4 sm:text-sm"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M15 3h6v6" />
+                  <path d="M10 14L21 3" />
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                </svg>
+                <span className="hidden sm:inline">Xem trang chủ</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={onLogout}
+                disabled={loggingOut}
+                title="Đăng xuất"
+                className="flex cursor-pointer items-center gap-1.5 rounded-full bg-[#f59e0b] px-3 py-2 text-xs font-bold text-white shadow-md shadow-amber-500/30 transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                <span className="hidden sm:inline">
+                  {loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Hàng dưới: breadcrumb + ngày giờ */}
+          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-amber-200/70 pt-3">
+            <nav
+              aria-label="Breadcrumb"
+              className="flex min-w-0 flex-wrap items-center gap-1.5 bg-transparent! text-xs font-semibold text-slate-500 sm:text-sm"
+            >
+              <span className="text-slate-400">Quản lý</span>
+              {trail.map((label, i) => {
+                const isLast = i === trail.length - 1;
+                return (
+                  <span
+                    key={`${label}-${i}`}
+                    className="flex items-center gap-1.5"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      className="text-amber-300"
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    <span
+                      className={
+                        isLast
+                          ? "rounded-full bg-[#f59e0b] px-2.5 py-0.5 font-bold text-white shadow-sm shadow-amber-500/30"
+                          : ""
+                      }
+                    >
+                      {label}
+                    </span>
+                  </span>
+                );
+              })}
+            </nav>
+
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="text-amber-500"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span className="capitalize">{dateText}</span>
+              <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 font-bold tabular-nums text-amber-800">
+                {timeText}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Khung admin (nằm BÊN TRONG ToastProvider nên dùng được useToast)    */
 /* ------------------------------------------------------------------ */
@@ -842,50 +1105,21 @@ function AdminShell({ children }: { children: ReactNode }) {
   if (isAuthPage) return <>{children}</>;
 
   const activeItem = findActiveItem(MENU_ITEMS, pathname);
+  const trail = findTrail(MENU_ITEMS, pathname) ?? [];
+
   const isSettingsActive = matchPath(SETTINGS_ITEM.path, pathname);
   const closeMobileMenu = () => setMenuOpenFor(null);
 
   return (
     <LuckyDrawProvider>
       <div className="min-h-screen flex flex-col bg-(--paper)">
-        <div className="topbar">
-          <div className="topbar-inner">
-            <div>
-              <h1 className="logo" style={{ marginBottom: "4px" }}>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M12 3L2 8l10 5 10-5-10-5z" />
-                  <path d="M2 12l10 5 10-5" />
-                  <path d="M2 8v6" />
-                </svg>
-                Trang quản lý của Cô Trúc
-              </h1>
-              <p>
-                Quản lý thời khóa biểu, thông báo, tài liệu, trò chơi và hình
-                ảnh lớp học
-              </p>
-            </div>
-            <div className="topbar-actions">
-              <Link href="/" className="btn-ghost">
-                Xem trang chủ
-              </Link>
-              <button
-                type="button"
-                className="btn-danger btn-primary"
-                onClick={handleLogout}
-                disabled={loggingOut}
-              >
-                {loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
-              </button>
-            </div>
-          </div>
-        </div>
-
         <main className="w-full px-3 py-4 sm:px-6 sm:py-6 max-w-7xl mx-auto space-y-8 flex-1">
+          <AdminHeader
+            user={user}
+            trail={trail}
+            loggingOut={loggingOut}
+            onLogout={handleLogout}
+          />
           <div className="flex flex-col lg:flex-row gap-6 items-start relative">
             <aside className="w-full lg:w-72 shrink-0 sticky top-0 lg:top-6 z-30">
               <div className="bg-white backdrop-blur-md p-2.5 lg:p-4 rounded-3xl border border-amber-200 shadow-lg shadow-amber-950/5 lg:flex lg:flex-col lg:h-[calc(100vh-3rem)]">

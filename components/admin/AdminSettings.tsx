@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
 import { db, auth } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { doc, getDoc, setDoc, deleteField } from "firebase/firestore";
+import { resizeToDataUrl, useAdminAvatar } from "@/lib/adminAvatar";
 import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/components/ToastProvider";
 import { ClassInfo, DEFAULT_CLASS_INFO } from "@/lib/classInfo";
@@ -62,6 +63,10 @@ export default function AdminSettings() {
   const [nickname, setNickname] = useState("");
   const [savingNick, setSavingNick] = useState(false);
 
+  const avatar = useAdminAvatar(uid);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+
   // Nếu chọn "Theo hệ thống" thì lắng nghe khi máy đổi chế độ
   useEffect(() => {
     if (theme !== "system") return;
@@ -116,6 +121,53 @@ export default function AdminSettings() {
     localStorage.setItem("theme", t);
     applyTheme(t);
     listeners.forEach((cb) => cb()); // báo cho React đọc lại
+  };
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // cho phép chọn lại cùng một file
+    if (!file || !uid) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Vui lòng chọn một file ảnh!");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Ảnh quá lớn, vui lòng chọn ảnh dưới 10MB!");
+      return;
+    }
+    setSavingAvatar(true);
+    try {
+      const dataUrl = await resizeToDataUrl(file);
+      await setDoc(
+        doc(db, "adminProfiles", uid),
+        { avatar: dataUrl },
+        { merge: true },
+      );
+      toast.success("Đã đổi ảnh đại diện!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể lưu ảnh, vui lòng thử ảnh khác.");
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!uid) return;
+    setSavingAvatar(true);
+    try {
+      await setDoc(
+        doc(db, "adminProfiles", uid),
+        { avatar: deleteField() },
+        { merge: true },
+      );
+      toast.success("Đã xóa ảnh đại diện!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể xóa ảnh.");
+    } finally {
+      setSavingAvatar(false);
+    }
   };
 
   const handleSaveNickname = async () => {
@@ -197,6 +249,74 @@ export default function AdminSettings() {
               <div className="text-[11px] text-slate-500">{o.desc}</div>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Ảnh đại diện */}
+      <div className="space-y-3 pt-5 border-t border-slate-100">
+        <h3 className="text-sm font-bold text-slate-700">Ảnh đại diện</h3>
+        <div className="flex items-center gap-4">
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-amber-100 ring-2 ring-amber-300 shadow-md shadow-amber-500/20">
+            {avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatar}
+                alt="Ảnh đại diện"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center bg-linear-to-br from-amber-400 to-[#f59e0b] text-white">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3L2 8l10 5 10-5-10-5z" />
+                  <path d="M2 12l10 5 10-5" />
+                  <path d="M2 8v6" />
+                </svg>
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarFile}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={savingAvatar || !uid}
+                className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                {savingAvatar ? "Đang lưu..." : "Chọn ảnh từ máy"}
+              </button>
+              {avatar && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={savingAvatar}
+                  className="px-3.5 py-2 text-xs font-bold bg-white text-slate-600 border border-slate-200 rounded-xl hover:border-red-300 hover:text-red-600 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Xóa ảnh
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 m-0">
+              Ảnh tự cắt vuông và thu nhỏ. Hiển thị ở chip tài khoản trên đầu
+              trang.
+            </p>
+          </div>
         </div>
       </div>
 
