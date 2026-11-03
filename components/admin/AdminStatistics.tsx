@@ -36,6 +36,12 @@ import {
 } from "@/lib/weeklyScore";
 import { HIDDEN_POSITION_TAGS, getPositionTagStyle } from "@/lib/positionTags";
 import LiveClock from "./LiveClock";
+import {
+  useAdminStreak,
+  StreakModal,
+  StreakChip,
+  StreakCelebration,
+} from "./StreakSystem";
 
 interface StudentItem {
   id: string;
@@ -490,6 +496,9 @@ export default function AdminStatistics({
 }) {
   const toast = useToast();
 
+  const { adminName, streak, celebration, dismissCelebration } =
+    useAdminStreak();
+
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [latestAnnouncement, setLatestAnnouncement] =
@@ -777,6 +786,8 @@ export default function AdminStatistics({
   };
 
   const [isShortcutModalOpen, setIsShortcutModalOpen] = useState(false);
+
+  const [isStreakModalOpen, setIsStreakModalOpen] = useState(false);
 
   // Hàm bật/tắt chọn tính năng ra ngoài màn hình chính
   const toggleFeatureSelection = (id: string) => {
@@ -1320,7 +1331,7 @@ export default function AdminStatistics({
               className="text-2xl sm:text-3xl font-extrabold tracking-tight m-0 mb-3.5"
               style={{ color: "#f0b429" }}
             >
-              Chào Cô Trúc trở lại! 👋
+              Chào {adminName ?? "bạn"} trở lại! 👋
             </h2>
             <p className="text-sm text-slate-600 m-0 max-w-xl font-normal leading-relaxed mb-4">
               Tổng quan lớp học hôm nay gồm điểm danh, thi đua, thông báo và
@@ -1369,6 +1380,10 @@ export default function AdminStatistics({
                   : `${new Date().getFullYear() - 1}-${new Date().getFullYear()}`}
               </span>
               <LiveClock />
+              <StreakChip
+                streak={streak}
+                onClick={() => setIsStreakModalOpen(true)}
+              />
             </div>
           </div>
 
@@ -2712,6 +2727,18 @@ export default function AdminStatistics({
           </div>
         </div>
       )}
+
+      <StreakCelebration
+        celebration={celebration}
+        streak={streak}
+        onClose={dismissCelebration}
+      />
+
+      <StreakModal
+        open={isStreakModalOpen}
+        streak={streak}
+        onClose={() => setIsStreakModalOpen(false)}
+      />
 
       {/* Nút Về đầu trang */}
       {showScrollTop && (

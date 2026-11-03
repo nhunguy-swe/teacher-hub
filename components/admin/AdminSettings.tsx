@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { useToast } from "@/components/ToastProvider";
 import { ClassInfo, DEFAULT_CLASS_INFO } from "@/lib/classInfo";
 import { useReminderSettings } from "@/lib/reminderSettings";
@@ -56,6 +57,11 @@ export default function AdminSettings() {
   const [info, setInfo] = useState<ClassInfo>(DEFAULT_CLASS_INFO);
   const [saving, setSaving] = useState(false);
 
+  // Nickname hiển thị ở lời chào "Chào {nickname} trở lại!"
+  const [uid, setUid] = useState<string | null>(null);
+  const [nickname, setNickname] = useState("");
+  const [savingNick, setSavingNick] = useState(false);
+
   // Nếu chọn "Theo hệ thống" thì lắng nghe khi máy đổi chế độ
   useEffect(() => {
     if (theme !== "system") return;
@@ -64,6 +70,25 @@ export default function AdminSettings() {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [theme]);
+
+  // Lấy uid của tài khoản đang đăng nhập
+  useEffect(() => onAuthStateChanged(auth, (u) => setUid(u?.uid ?? null)), []);
+
+  // Đọc nickname hiện tại từ Firestore
+  useEffect(() => {
+    if (!uid) return;
+    let cancelled = false;
+    getDoc(doc(db, "adminProfiles", uid))
+      .then((snap) => {
+        if (!cancelled && snap.exists()) {
+          setNickname((snap.data().nickname as string | undefined) ?? "");
+        }
+      })
+      .catch((err) => console.error(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
 
   // Đọc thông tin lớp từ Firestore
   useEffect(() => {
@@ -91,6 +116,24 @@ export default function AdminSettings() {
     localStorage.setItem("theme", t);
     applyTheme(t);
     listeners.forEach((cb) => cb()); // báo cho React đọc lại
+  };
+
+  const handleSaveNickname = async () => {
+    if (!uid) return;
+    setSavingNick(true);
+    try {
+      await setDoc(
+        doc(db, "adminProfiles", uid),
+        { nickname: nickname.trim() },
+        { merge: true },
+      );
+      toast.success("Đã lưu nickname!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể lưu nickname.");
+    } finally {
+      setSavingNick(false);
+    }
   };
 
   const handleSaveInfo = async () => {
@@ -133,7 +176,7 @@ export default function AdminSettings() {
       </div>
 
       {/* Giao diện */}
-      <div className="space-y-3">
+      <div className="space-y-3 pt-5 border-t border-slate-100">
         <h3 className="text-sm font-bold text-slate-700">Giao diện</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {OPTIONS.map((o) => (
@@ -157,48 +200,76 @@ export default function AdminSettings() {
         </div>
       </div>
 
+      {/* Nickname */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-slate-700">Nickname</h3>
+        <div className="flex flex-col sm:flex-row gap-3 text-xs">
+          <input
+            type="text"
+            maxLength={30}
+            placeholder="Ví dụ: Cô Trúc"
+            className="flex-1 px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium placeholder:text-slate-300 focus:outline-none focus:border-amber-500 transition-colors"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSaveNickname()}
+          />
+          <button
+            type="button"
+            onClick={handleSaveNickname}
+            disabled={savingNick || !uid}
+            className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+          >
+            {savingNick ? "Đang lưu..." : "Lưu"}
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 m-0">
+          Hiển thị ở lời chào: &quot;Chào {nickname.trim() || "bạn"} trở
+          lại!&quot;
+        </p>
+      </div>
+
       {/* Nhắc nhở */}
-<div className="space-y-3 pt-5 border-t border-slate-100">
-  <h3 className="text-sm font-bold text-slate-700">Nhắc nhở</h3>
+      <div className="space-y-3 pt-5 border-t border-slate-100">
+        <h3 className="text-sm font-bold text-slate-700">Nhắc nhở</h3>
 
-  <label className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer">
-    <div>
-      <div className="text-sm font-bold text-slate-800">
-        🔔 Bật nhắc nhở khi mở web
-      </div>
-      <div className="text-[11px] text-slate-500">
-        Hiện thông báo 1 lần mỗi ngày khi bạn mở trang quản trị
-      </div>
-    </div>
-    <input
-      type="checkbox"
-      className="w-5 h-5 accent-amber-600 cursor-pointer"
-      checked={reminder.enabled}
-      onChange={(e) => updateReminder({ enabled: e.target.checked })}
-    />
-  </label>
+        <label className="flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer">
+          <div>
+            <div className="text-sm font-bold text-slate-800">
+              🔔 Bật nhắc nhở khi mở web
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Hiện thông báo 1 lần mỗi ngày khi bạn mở trang quản trị
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            className="w-5 h-5 accent-amber-600 cursor-pointer"
+            checked={reminder.enabled}
+            onChange={(e) => updateReminder({ enabled: e.target.checked })}
+          />
+        </label>
 
-  <label
-    className={`flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer ${
-      reminder.enabled ? "" : "opacity-50 pointer-events-none"
-    }`}
-  >
-    <div>
-      <div className="text-sm font-bold text-slate-800">
-        🎂 Nhắc sinh nhật học sinh
+        <label
+          className={`flex items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 cursor-pointer ${
+            reminder.enabled ? "" : "opacity-50 pointer-events-none"
+          }`}
+        >
+          <div>
+            <div className="text-sm font-bold text-slate-800">
+              🎂 Nhắc sinh nhật học sinh
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Dựa trên ngày sinh trong mục Học sinh
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            className="w-5 h-5 accent-amber-600 cursor-pointer"
+            checked={reminder.birthday}
+            onChange={(e) => updateReminder({ birthday: e.target.checked })}
+          />
+        </label>
       </div>
-      <div className="text-[11px] text-slate-500">
-        Dựa trên ngày sinh trong mục Học sinh
-      </div>
-    </div>
-    <input
-      type="checkbox"
-      className="w-5 h-5 accent-amber-600 cursor-pointer"
-      checked={reminder.birthday}
-      onChange={(e) => updateReminder({ birthday: e.target.checked })}
-    />
-  </label>
-</div>
 
       {/* Thông tin lớp */}
       <div className="space-y-3 pt-5 border-t border-slate-100">
