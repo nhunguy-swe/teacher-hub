@@ -6,20 +6,34 @@
  * - Mỗi admin có streak riêng: Firestore `adminStreaks/{uid}`.
  * - Nickname hiển thị ở lời chào: Firestore `adminProfiles/{uid}` (field `nickname`),
  *   được đặt trong trang Cài đặt.
- * - Mở web lần đầu trong ngày => +1 (mở nhiều lần chỉ tính 1).
- * - T7, CN không làm đứt chuỗi.
- * - "Băng bảo vệ" (Streak Freeze): bỏ lỡ ngày làm việc sẽ tự dùng 1 băng
- *   thay vì mất chuỗi. Cứ mỗi 7 ngày liên tiếp được tặng 1 băng (tối đa 2).
- * - Popup chúc mừng + pháo giấy khi tăng chuỗi, mốc lớn có lời chúc riêng.
+ * - Mở web lần đầu trong ngày => ghi nhận ngày đó (mở nhiều lần chỉ tính 1).
+ * - Chuỗi chỉ tính từ T2 đến T6:
+ *     + Vào web: +1, hiện dấu ✓.
+ *     + Bỏ lỡ 1 ngày: tự dùng 1 băng, hiện bông tuyết ❄️.
+ *     + Hết băng: mất chuỗi, bắt đầu lại từ 1.
+ * - T7, CN không làm đứt chuỗi và không cộng thêm vào chuỗi:
+ *     + Vào web: hiện dấu ✓ (không cộng vào chuỗi).
+ *     + Không vào: hiện cỏ 4 lá 🍀 (thay cho băng).
+ * - "Băng bảo vệ" (Streak Freeze): cứ mỗi 7 ngày liên tiếp được tặng 1 băng
+ *   (tối đa 2).
+ * - Popup chúc mừng + pháo giấy khi tăng chuỗi (ngày làm việc), mốc lớn có
+ *   lời chúc riêng. Cuối tuần không hiện popup.
  *
  * Xuất ra:
- *   <StreakCard />     -> thẻ chi tiết: ngọn lửa + 7 ngày trong tuần + băng bảo vệ
- *   <StreakModal />    -> popup xem streak khi bấm vào chip
- *   <StreakChip />     -> chip nhỏ cho banner (bấm để mở popup)
+ *   <StreakCard />        -> thẻ chi tiết: ngọn lửa + 7 ngày trong tuần + băng bảo vệ
+ *   <StreakModal />       -> popup xem streak khi bấm vào chip
+ *   <StreakChip />        -> chip nhỏ cho banner (bấm để mở popup)
  *   <StreakCelebration /> -> popup chúc mừng
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -33,7 +47,7 @@ export const ADMIN_NAMES: Record<string, string> = {
   UID_ADMIN_2: "Admin 2",
 };
 
-const MAX_FREEZES = 2; // số băng tối đa được giữ
+const MAX_FREEZES = 3; // số băng tối đa được giữ
 const FREEZE_EVERY = 7; // cứ mỗi 7 ngày liên tiếp tặng 1 băng
 const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
 
@@ -84,6 +98,16 @@ const isWeekend = (k: string) => {
 /** Tính streak mới khi admin vào web ở ngày todayKey. */
 function computeVisit(prev: StreakData | null, todayKey: string) {
   const base = prev ?? EMPTY;
+
+  // Cuối tuần: chỉ ghi nhận đã vào (hiện ngọn lửa), không đổi chuỗi, không popup
+  if (isWeekend(todayKey)) {
+    const next: StreakData = {
+      ...base,
+      days: [...base.days, todayKey].slice(-60),
+    };
+    return { next, celebration: null };
+  }
+
   let current: number;
   let freezes = base.freezes;
   let usedFreezes = 0;
@@ -186,11 +210,12 @@ export function useAdminStreak() {
           const todayKey = toKey(new Date());
           const snap = await getDoc(ref);
           const data = snap.exists() ? (snap.data() as StreakData) : null;
-          if (data?.lastDate === todayKey) return; // hôm nay đã tính
+          if (data?.lastDate === todayKey || data?.days?.includes(todayKey))
+            return; // hôm nay đã tính
 
           const { next, celebration: c } = computeVisit(data, todayKey);
           await setDoc(ref, next);
-          setCelebration(c);
+          if (c) setCelebration(c);
         } catch (e) {
           console.error("Lỗi cập nhật streak:", e);
           checkedFor.current = null;
@@ -326,6 +351,37 @@ function SnowflakeIcon({ className = "" }: { className?: string }) {
   );
 }
 
+function CloverIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      {[0, 90, 180, 270].map((deg) => (
+        <path
+          key={deg}
+          transform={`rotate(${deg} 12 12)`}
+          d="M12 12C12 8 9.2 5 7.2 6.4 5.2 7.9 7.2 11 12 12z"
+          fill="#22C55E"
+          stroke="#16A34A"
+          strokeWidth="0.8"
+          strokeLinejoin="round"
+        />
+      ))}
+      <path
+        d="M12 12q1 5 4 8"
+        fill="none"
+        stroke="#15803D"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** Huy hiệu băng bảo vệ: tinh thể xanh phát sáng + số lượng */
 function FreezeBadge({
   count,
@@ -379,8 +435,38 @@ function WeekRow({ streak }: { streak: StreakData }) {
       {weekKeys(todayKey).map((k, i) => {
         const done = days.has(k);
         const ice = frozen.has(k);
+        const weekend = isWeekend(k);
         const isToday = k === todayKey;
-        const future = k > todayKey;
+        const past = k < todayKey;
+
+        let cls = "bg-slate-50 border-slate-200 text-slate-300";
+        let content: ReactNode = "";
+
+        if (weekend) {
+          if (done) {
+            cls = "bg-orange-500 border-orange-500 text-white shadow-sm";
+            content = "✓";
+          } else if (past) {
+            cls = "bg-emerald-50 border-emerald-200";
+            content = <CloverIcon />;
+          } else if (isToday) {
+            cls = "bg-white border-orange-400 border-dashed";
+          }
+        } else {
+          if (done) {
+            cls = "bg-orange-500 border-orange-500 text-white shadow-sm";
+            content = "✓";
+          } else if (ice) {
+            cls =
+              "bg-linear-to-br from-cyan-100 to-sky-200 border-sky-300 text-sky-600 shadow-[0_0_8px_rgba(56,189,248,0.5)]";
+            content = <SnowflakeIcon className="w-4 h-4" />;
+          } else if (isToday) {
+            cls = "bg-white border-orange-400 border-dashed text-orange-500";
+          } else if (past) {
+            cls = "bg-slate-100 border-slate-200 text-slate-300";
+          }
+        }
+
         return (
           <div key={k} className="flex flex-col items-center gap-1.5">
             <span
@@ -391,20 +477,10 @@ function WeekRow({ streak }: { streak: StreakData }) {
               {WEEK_LABELS[i]}
             </span>
             <span
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold border-2 transition-all ${
-                done
-                  ? "bg-orange-500 border-orange-500 text-white shadow-sm"
-                  : ice
-                    ? "bg-linear-to-br from-cyan-100 to-sky-200 border-sky-300 text-sky-600 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
-                    : isToday
-                      ? "bg-white border-orange-400 border-dashed text-orange-500"
-                      : future || isWeekend(k)
-                        ? "bg-slate-50 border-slate-200 text-slate-300"
-                        : "bg-slate-100 border-slate-200 text-slate-300"
-              }`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold border-2 transition-all ${cls}`}
               title={k}
             >
-              {done ? "✓" : ice ? <SnowflakeIcon className="w-4 h-4" /> : ""}
+              {content}
             </span>
           </div>
         );
@@ -632,7 +708,7 @@ export function StreakCelebration({
 
       <div className="relative bg-white rounded-3xl shadow-xl w-full max-w-sm p-7 text-center space-y-5 streak-pop">
         <div className="flex flex-col items-center">
-          <div className={big ? "scale-125 mb-2" : ""}>
+          <div className={big ? "scale-125 mb-4" : "mb-2"}>
             <Flame size={88} />
           </div>
           <p className="m-0 text-6xl font-extrabold text-orange-500 leading-none streak-count">
@@ -669,7 +745,7 @@ export function StreakCelebration({
           type="button"
           onClick={onClose}
           autoFocus
-          className="w-full py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-extrabold shadow-[0_4px_0_0_#c2410c] active:translate-y-0.5 active:shadow-[0_2px_0_0_#c2410c] transition-all cursor-pointer"
+          className="w-full py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-extrabold shadow-[0_4px_0_0_#c2410c] active:translate-y-0.5 active:shadow-[0_2px_0_0_#c2410c] transition-all cursor-pointer outline-none focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
         >
           Tiếp tục
         </button>
