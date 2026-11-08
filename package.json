@@ -13,6 +13,7 @@
     "@capacitor/android": "^8.5.2",
     "@capacitor/core": "^8.5.2",
     "canvas-confetti": "^1.9.4",
+    "exceljs": "^4.4.0",
     "firebase": "^12.17.1",
     "firebase-admin": "^14.5.0",
     "html2canvas": "^1.4.1",
