@@ -182,12 +182,6 @@ const formatDMY = (key: string) => key.split("-").reverse().join("/");
 
 const DEFAULT_SCHOOL = "TH số 1 Hoài Nhơn Đông";
 
-const INFO_FIELDS = [
-  ["className", "Tên lớp (VD: 4A4):"],
-  ["schoolName", "Tên trường:"],
-  ["teacherName", "Giáo viên chủ nhiệm:"],
-] as const;
-
 const readBirthDate = (x: Record<string, unknown>) => {
   const v = x.birthDate ?? x.dob ?? x.dateOfBirth ?? x.birthday;
   if (!v) return "";
@@ -266,6 +260,7 @@ export default function AdminSemester() {
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<YearItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // đang sửa năm học nào
 
   const [tone, setTone] = useState<CommentTone>("short");
   const [activeStudentId, setActiveStudentId] = useState("");
@@ -464,6 +459,8 @@ export default function AdminSemester() {
       !window.confirm("Còn dữ liệu chưa lưu, đổi năm học sẽ mất. Tiếp tục?")
     )
       return;
+    setEditingId(null);
+    setForm(defaultYearForm());
     setSelectedId(id);
   };
 
@@ -526,22 +523,51 @@ export default function AdminSemester() {
     }
   };
 
-  const handleEditInfo = async () => {
-    if (!year) return;
-    const next: Record<string, string> = {};
-    for (const [k, label] of INFO_FIELDS) {
-      const v = window.prompt(
-        label,
-        year[k] || (k === "schoolName" ? DEFAULT_SCHOOL : ""),
-      );
-      if (v === null) return;
-      next[k] = v.trim();
+  const handleEditInfo = (y: YearItem) => {
+    setEditingId(y.id);
+    setForm({
+      name: y.name,
+      className: y.className,
+      schoolName: y.schoolName || DEFAULT_SCHOOL,
+      teacherName: y.teacherName,
+      grade: y.grade || 1,
+      startDate: y.startDate,
+      endDate: y.endDate,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setForm(defaultYearForm());
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    const name = form.name.trim();
+    if (!name || !form.startDate || !form.endDate) {
+      toast.error("Vui lòng nhập tên năm học, ngày bắt đầu và ngày kết thúc");
+      return;
     }
+    if (form.endDate < form.startDate) {
+      toast.error("Ngày kết thúc phải sau ngày bắt đầu");
+      return;
+    }
+    setCreating(true);
     try {
-      await updateDoc(doc(db, "semesters", year.id), next);
+      await updateDoc(doc(db, "semesters", editingId), {
+        name,
+        className: form.className.trim(),
+        schoolName: form.schoolName.trim(),
+        teacherName: form.teacherName.trim(),
+        startDate: form.startDate,
+        endDate: form.endDate,
+      });
       toast.success("Đã cập nhật thông tin năm học");
+      handleCancelEdit();
     } catch {
       toast.error("Không thể cập nhật");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -569,6 +595,7 @@ export default function AdminSemester() {
       batch.delete(doc(db, "semesters", id));
       await batch.commit();
       setSelectedId("");
+      if (editingId === id) handleCancelEdit();
       toast.success("Đã xóa năm học!");
     } catch (err) {
       console.error(err);
@@ -1081,9 +1108,6 @@ export default function AdminSemester() {
           <h2 className="text-xl font-bold m-0 text-slate-800">
             Đánh giá học sinh theo năm học
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Theo Thông tư 27/2020: giữa HK1, cuối HK1, giữa HK2, cuối năm
-          </p>
         </div>
 
         {years.length > 0 && (
@@ -1120,7 +1144,7 @@ export default function AdminSemester() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-5 bg-amber-50/40 p-5 rounded-3xl border border-amber-100/60 space-y-3 text-xs">
             <h3 className="text-sm font-extrabold text-slate-800 m-0">
-              Tạo năm học mới
+              {editingId ? "Sửa thông tin năm học" : "Tạo năm học mới"}
             </h3>
             <div>
               <label className="font-semibold text-slate-600 block mb-1">
@@ -1181,6 +1205,7 @@ export default function AdminSemester() {
               </label>
               <select
                 value={form.grade}
+                disabled={!!editingId}
                 onChange={(e) =>
                   setForm({ ...form, grade: Number(e.target.value) })
                 }
@@ -1222,20 +1247,35 @@ export default function AdminSemester() {
                 />
               </div>
             </div>
-            <p className="text-[11px] text-slate-400 m-0">
-              Danh sách môn được đặt sẵn theo khối lớp. Điểm kiểm tra định kì là
-              số nguyên từ 0 đến 10: giữa kì chỉ nhập cho Tiếng Việt và Toán,
-              cuối kì và cuối năm nhập thêm cho Tiếng Anh, Lịch sử và Địa lí,
-              Khoa học, Tin học, Công nghệ.
-            </p>
-            <button
-              type="button"
-              onClick={handleCreateYear}
-              disabled={creating}
-              className={`${BTN_AMBER} w-full py-2.5`}
-            >
-              {creating ? "Đang tạo..." : "Tạo năm học"}
-            </button>
+            {editingId ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={creating}
+                  className={`${BTN} flex-1 py-2.5 bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200`}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={creating}
+                  className={`${BTN_AMBER} flex-1 py-2.5`}
+                >
+                  {creating ? "Đang lưu..." : "Lưu"}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCreateYear}
+                disabled={creating}
+                className={`${BTN_AMBER} w-full py-2.5`}
+              >
+                {creating ? "Đang tạo..." : "Tạo năm học"}
+              </button>
+            )}
           </div>
 
           <div className="lg:col-span-7 space-y-2">
@@ -1289,10 +1329,13 @@ export default function AdminSemester() {
                         <>
                           <button
                             type="button"
-                            onClick={handleEditInfo}
-                            className="px-3 py-1.5 text-[11px] font-bold bg-white text-slate-700 border border-slate-200 rounded-lg hover:border-amber-300 cursor-pointer"
+                            onClick={() => handleEditInfo(y)}
+                            disabled={editingId === y.id}
+                            className="px-3 py-1.5 text-[11px] font-bold bg-white text-slate-700 border border-slate-200 rounded-lg hover:border-amber-300 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
                           >
-                            Sửa lớp/trường
+                            {editingId === y.id
+                              ? "Đang sửa..."
+                              : "Sửa lớp/trường"}
                           </button>
                           <button
                             type="button"
