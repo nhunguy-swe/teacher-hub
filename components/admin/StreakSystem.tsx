@@ -555,6 +555,155 @@ export function StreakCard({
   );
 }
 
+/* ================= LỊCH THÁNG KIỂU DUOLINGO ================= */
+
+const MONTH_WEEK_LABELS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+function StreakMonthCalendar({ streak }: { streak: StreakData }) {
+  const todayKey = toKey(new Date());
+  const [cursor, setCursor] = useState(() => {
+    const t = new Date();
+    return new Date(t.getFullYear(), t.getMonth(), 1);
+  });
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const isCurrentMonth =
+    year === new Date().getFullYear() && month === new Date().getMonth();
+
+  const done = useMemo(() => new Set(streak.days), [streak.days]);
+  const frozen = useMemo(() => new Set(streak.frozenDays), [streak.frozenDays]);
+
+  // Dựng các tuần (T2 -> CN), ô ngoài tháng = null
+  const weeks = useMemo(() => {
+    const first = new Date(year, month, 1);
+    const offset = (first.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (string | null)[] = [];
+    for (let i = 0; i < offset; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++)
+      cells.push(toKey(new Date(year, month, d)));
+    while (cells.length % 7 !== 0) cells.push(null);
+    const rows: (string | null)[][] = [];
+    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+    return rows;
+  }, [year, month]);
+
+  // Một ngày được "thắp sáng" nếu đã vào hoặc được băng bảo vệ cứu
+  const lit = (k: string | null) => !!k && (done.has(k) || frozen.has(k));
+
+  return (
+    <div className="space-y-3">
+      {/* Tiêu đề tháng + chuyển tháng */}
+      <div className="flex items-center justify-between">
+        <h4 className="m-0 text-sm font-extrabold text-slate-800">
+          Tháng {month + 1} • {year}
+        </h4>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setCursor(new Date(year, month - 1, 1))}
+            className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs cursor-pointer"
+            aria-label="Tháng trước"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setCursor(new Date(year, month + 1, 1))}
+            disabled={isCurrentMonth}
+            className="w-7 h-7 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs cursor-pointer disabled:opacity-30 disabled:cursor-default"
+            aria-label="Tháng sau"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border-2 border-slate-200 p-3 space-y-1.5">
+        {/* Nhãn thứ */}
+        <div className="grid grid-cols-7 text-center text-[11px] font-bold text-slate-400 pb-1">
+          {MONTH_WEEK_LABELS.map((l) => (
+            <span key={l}>{l}</span>
+          ))}
+        </div>
+
+        {weeks.map((row, ri) => {
+          // Tìm các đoạn ngày liên tiếp được thắp sáng để vẽ dải nối liền
+          const segments: { start: number; end: number }[] = [];
+          let s = -1;
+          row.forEach((k, i) => {
+            if (lit(k)) {
+              if (s === -1) s = i;
+            } else if (s !== -1) {
+              segments.push({ start: s, end: i - 1 });
+              s = -1;
+            }
+          });
+          if (s !== -1) segments.push({ start: s, end: 6 });
+
+          return (
+            <div key={ri} className="relative grid grid-cols-7 h-9">
+              {/* Dải màu cam nối liền các ngày */}
+              {segments.map((seg, si) => (
+                <div
+                  key={si}
+                  className="absolute top-0.5 bottom-0.5 rounded-full bg-linear-to-b from-amber-400 to-orange-500 ring-2 ring-amber-200"
+                  style={{
+                    left: `calc(${(seg.start / 7) * 100}% + 2px)`,
+                    width: `calc(${((seg.end - seg.start + 1) / 7) * 100}% - 4px)`,
+                  }}
+                />
+              ))}
+
+              {/* Số ngày */}
+              {row.map((k, ci) => {
+                if (!k) return <span key={ci} className="relative z-10" />;
+                const dayNum = Number(k.slice(8));
+                const isDone = done.has(k);
+                const isIce = frozen.has(k) && !isDone;
+                const isToday = k === todayKey;
+                const future = k > todayKey;
+                const weekend = isWeekend(k);
+                const missedPast =
+                  !isDone && !isIce && !future && !isToday && weekend;
+
+                return (
+                  <span
+                    key={ci}
+                    title={k}
+                    className={`relative z-10 flex items-center justify-center text-xs font-extrabold ${
+                      isDone || isIce
+                        ? "text-white"
+                        : isToday
+                          ? "text-orange-600"
+                          : future
+                            ? "text-slate-300"
+                            : "text-slate-400"
+                    }`}
+                  >
+                    {isIce ? (
+                      <SnowflakeIcon className="w-4 h-4" />
+                    ) : missedPast ? (
+                      <CloverIcon className="w-4 h-4" />
+                    ) : isToday && !isDone ? (
+                      <span className="w-7 h-7 rounded-full border-2 border-dashed border-orange-400 flex items-center justify-center">
+                        {dayNum}
+                      </span>
+                    ) : (
+                      dayNum
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ================= POPUP XEM STREAK ================= */
 
 export function StreakModal({
@@ -579,24 +728,59 @@ export function StreakModal({
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/50 dark:bg-black/30 backdrop-blur-xs dark:backdrop-blur-none p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
+      <StreakStyles />
       <div
-        className="relative w-full max-w-xl streak-pop"
+        className="relative w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-3xl shadow-xl border-2 border-amber-400 p-6 space-y-5 streak-pop"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
           aria-label="Đóng"
-          className="absolute top-3 right-3 z-10 text-slate-400 hover:text-slate-600 font-bold text-sm bg-slate-100 hover:bg-slate-200 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+          className="absolute top-2.5 right-2.5 z-10 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-slate-500 bg-white border border-slate-200 shadow-xs hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
         >
           ✕
         </button>
-        <StreakCard streak={streak} className="shadow-xl" />
+
+        {/* Hàng thống kê: streak + băng bảo vệ */}
+        <div className="grid grid-cols-2 gap-2.5 pt-6">
+          <div className="flex items-center gap-3 rounded-2xl border-2 border-slate-200 px-4 py-3">
+            <Flame size={28} lit={streak.current > 0} />
+            <div className="min-w-0 leading-tight">
+              <p className="m-0 text-xl font-extrabold text-orange-500">
+                {streak.current}
+              </p>
+              <p className="m-0 text-[11px] font-semibold text-slate-400 truncate">
+                Ngày liên tiếp
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="flex items-center gap-3 rounded-2xl border-2 border-slate-200 px-4 py-3"
+            title="Băng bảo vệ: tự dùng khi bạn bỏ lỡ một ngày làm việc. Cứ 7 ngày liên tiếp nhận 1 băng."
+          >
+            <span className="w-7 h-7 rounded-full flex items-center justify-center text-white bg-linear-to-br from-cyan-300 via-sky-400 to-blue-500 shrink-0">
+              <SnowflakeIcon className="w-4 h-4" />
+            </span>
+            <div className="min-w-0 leading-tight">
+              <p className="m-0 text-xl font-extrabold text-sky-500">
+                {streak.freezes}/{MAX_FREEZES}
+              </p>
+              <p className="m-0 text-[11px] font-semibold text-slate-400 truncate">
+                Băng bảo vệ
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Lịch tháng */}
+        <StreakMonthCalendar streak={streak} />
       </div>
     </div>
   );
