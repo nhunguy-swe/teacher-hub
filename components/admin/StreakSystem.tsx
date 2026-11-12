@@ -694,7 +694,7 @@ function StreakMonthCalendar({ streak }: { streak: StreakData }) {
                 k && frozen.has(k) && !done.has(k) && inStreak(streak, k) ? (
                   <div
                     key={`ice-${ci}`}
-                    className="absolute top-0.5 bottom-0.5 rounded-full bg-linear-to-b from-cyan-200 to-sky-400 ring-2 ring-sky-200 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
+                    className="absolute top-0.5 bottom-0.5 rounded-full bg-linear-to-b from-sky-300 to-sky-500 ring-2 ring-sky-200 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
                     style={{
                       left: `calc(${(ci / 7) * 100}% + 2px)`,
                       width: `calc(${100 / 7}% - 4px)`,
@@ -732,7 +732,9 @@ function StreakMonthCalendar({ streak }: { streak: StreakData }) {
                     }`}
                   >
                     {isIce ? (
-                      <SnowflakeIcon className="w-4 h-4" />
+                      <span style={{ color: "#fff" }}>
+                        <SnowflakeIcon className="w-4 h-4" />
+                      </span>
                     ) : missedPast ? (
                       <CloverIcon className="w-4 h-4" />
                     ) : isToday && !isDone ? (
@@ -854,6 +856,10 @@ export function StreakChip({
     >
       <Flame size={14} />
       {streak.current} ngày liên tiếp
+      <span className="inline-flex items-center gap-0.5 ml-1 pl-2 border-l border-orange-200 text-sky-600">
+        <SnowflakeIcon className="w-3.5 h-3.5" />
+        {streak.freezes}/{MAX_FREEZES}
+      </span>
     </button>
   );
 }
