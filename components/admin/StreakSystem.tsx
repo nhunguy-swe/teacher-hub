@@ -14,7 +14,7 @@
  * - T7, CN không làm đứt chuỗi và không cộng thêm vào chuỗi:
  *     + Vào web: hiện dấu ✓ (không cộng vào chuỗi).
  *     + Không vào: hiện cỏ 4 lá 🍀 (thay cho băng).
- * - "Băng bảo vệ" (Streak Freeze): cứ mỗi 7 ngày liên tiếp được tặng 1 băng
+ * - "Băng bảo vệ" (Streak Freeze): Băng bảo vệ: mỗi chuỗi được dùng tối đa 3 băng cho 3 ngày làm việc bỏ lỡ; quá 3 ngày thì mất chuỗi, băng về 0/3.
  *   (tối đa 3).
  * - Popup chúc mừng + pháo giấy khi tăng chuỗi (ngày làm việc), mốc lớn có
  *   lời chúc riêng. Cuối tuần không hiện popup.
@@ -47,8 +47,7 @@ export const ADMIN_NAMES: Record<string, string> = {
   UID_ADMIN_2: "Admin 2",
 };
 
-const MAX_FREEZES = 3; // số băng tối đa được giữ
-const FREEZE_EVERY = 7; // cứ mỗi 7 ngày liên tiếp tặng 1 băng
+const MAX_FREEZES = 3; // tối đa 3 ngày được băng bảo vệ cho mỗi chuỗi
 const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
 
 /* ================= KIỂU DỮ LIỆU ================= */
@@ -57,7 +56,8 @@ export interface StreakData {
   current: number;
   best: number;
   lastDate: string; // YYYY-MM-DD
-  freezes: number;
+  usedFreezes?: number; // số băng đã dùng trong chuỗi hiện tại (0-3)
+  freezes?: number; // field cũ, không còn dùng
   days: string[]; // các ngày đã vào (giữ 60 ngày gần nhất)
   frozenDays: string[]; // các ngày được băng bảo vệ
   streakStart?: string; // ngày bắt đầu chuỗi hiện tại; ngày trước đó không còn tính cam
@@ -65,9 +65,8 @@ export interface StreakData {
 
 export interface Celebration {
   count: number;
-  usedFreezes: number;
-  lostFreezes: number; // số băng đã dùng hết khi mất chuỗi
-  earnedFreeze: boolean;
+  usedFreezes: number; // số băng dùng lần này
+  lostFreezes: number; // số băng đã dùng khi mất chuỗi
   restarted: boolean; // mất chuỗi cũ, bắt đầu lại
   previous: number;
 }
@@ -76,7 +75,6 @@ const EMPTY: StreakData = {
   current: 0,
   best: 0,
   lastDate: "",
-  freezes: 0,
   days: [],
   frozenDays: [],
   streakStart: "",
@@ -102,6 +100,12 @@ const inStreak = (s: StreakData, k: string) => {
   const start = getStreakStart(s);
   return !start || k >= start;
 };
+
+// Số băng đã dùng trong chuỗi hiện tại (tương thích dữ liệu cũ chưa có usedFreezes)
+function getUsedFreezes(s: StreakData): number {
+  if (typeof s.usedFreezes === "number") return s.usedFreezes;
+  return s.frozenDays.filter((k) => inStreak(s, k)).length;
+}
 
 /* ================= TIỆN ÍCH NGÀY ================= */
 
@@ -133,7 +137,7 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
   }
 
   let current: number;
-  let freezes = base.freezes;
+  let used = getUsedFreezes(base);
   let usedFreezes = 0;
   let lostFreezes = 0;
   let restarted = false;
@@ -143,6 +147,7 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
   if (!base.lastDate) {
     current = 1;
     streakStart = todayKey;
+    used = 0;
   } else {
     const missed: string[] = [];
     let d = addDays(base.lastDate, 1);
@@ -153,33 +158,28 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
 
     if (missed.length === 0) {
       current = base.current + 1;
-    } else if (freezes >= missed.length) {
-      freezes -= missed.length;
+    } else if (used + missed.length <= MAX_FREEZES) {
+      // Còn đủ băng: dùng băng cho các ngày bỏ lỡ
+      used += missed.length;
       usedFreezes = missed.length;
       frozenDays.push(...missed);
       current = base.current + 1;
     } else {
-      // Mất chuỗi: dùng hết băng, reset về 1, ngày cũ mất màu cam
+      // Vượt quá 3 băng: mất chuỗi, quay lại 1 và đặt lại băng về 0/3
       current = 1;
       restarted = base.current > 1;
-      lostFreezes = base.freezes;
-      freezes = 0;
+      lostFreezes = used;
+      used = 0;
       frozenDays = [];
       streakStart = todayKey;
     }
-  }
-
-  let earnedFreeze = false;
-  if (current > 0 && current % FREEZE_EVERY === 0 && freezes < MAX_FREEZES) {
-    freezes += 1;
-    earnedFreeze = true;
   }
 
   const next: StreakData = {
     current,
     best: Math.max(base.best, current),
     lastDate: todayKey,
-    freezes,
+    usedFreezes: used,
     days: [...base.days, todayKey].slice(-60),
     frozenDays: frozenDays.slice(-30),
     streakStart,
@@ -189,7 +189,6 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
     count: current,
     usedFreezes,
     lostFreezes,
-    earnedFreeze,
     restarted,
     previous: base.current,
   };
@@ -561,9 +560,9 @@ export function StreakCard({
 
         <div className="ml-auto">
           <FreezeBadge
-            count={streak.freezes}
+            count={getUsedFreezes(streak)}
             max={MAX_FREEZES}
-            title="Băng bảo vệ: tự dùng khi bạn bỏ lỡ một ngày làm việc"
+            title="Băng bảo vệ đã dùng: mỗi ngày làm việc bỏ lỡ dùng 1 băng, quá 3 băng sẽ mất chuỗi"
           />
         </div>
       </div>
@@ -814,17 +813,17 @@ export function StreakModal({
 
           <div
             className="flex items-center gap-3 rounded-2xl border-2 border-slate-200 px-4 py-3"
-            title="Băng bảo vệ: tự dùng khi bạn bỏ lỡ một ngày làm việc. Cứ 7 ngày liên tiếp nhận 1 băng."
+            title="Mỗi ngày làm việc (T2-T6) bỏ lỡ dùng 1 băng. Dùng hết 3 băng mà bỏ lỡ nữa thì mất chuỗi."
           >
             <span className="w-7 h-7 rounded-full flex items-center justify-center text-white bg-linear-to-br from-cyan-300 via-sky-400 to-blue-500 shrink-0">
               <SnowflakeIcon className="w-4 h-4" />
             </span>
             <div className="min-w-0 leading-tight">
               <p className="m-0 text-xl font-extrabold text-sky-500">
-                {streak.freezes}/{MAX_FREEZES}
+                {getUsedFreezes(streak)}/{MAX_FREEZES}
               </p>
               <p className="m-0 text-[11px] font-semibold text-slate-400 truncate">
-                Băng bảo vệ
+                Băng đã dùng
               </p>
             </div>
           </div>
@@ -856,10 +855,6 @@ export function StreakChip({
     >
       <Flame size={14} />
       {streak.current} ngày liên tiếp
-      <span className="inline-flex items-center gap-0.5 ml-1 pl-2 border-l border-orange-200 text-sky-600">
-        <SnowflakeIcon className="w-3.5 h-3.5" />
-        {streak.freezes}/{MAX_FREEZES}
-      </span>
     </button>
   );
 }
@@ -979,12 +974,6 @@ export function StreakCelebration({
             {celebration.lostFreezes > 0
               ? `Đã dùng hết ${celebration.lostFreezes} băng bảo vệ nhưng không giữ được chuỗi`
               : "Bạn không còn băng bảo vệ để giữ chuỗi"}
-          </div>
-        )}
-        {celebration.earnedFreeze && (
-          <div className="flex items-center justify-center gap-1.5 bg-sky-50 border border-sky-200 text-sky-700 rounded-xl px-3 py-2 text-xs font-bold">
-            <SnowflakeIcon />
-            Bạn nhận được 1 băng bảo vệ!
           </div>
         )}
 
