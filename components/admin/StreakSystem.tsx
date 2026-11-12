@@ -15,7 +15,7 @@
  *     + Vào web: hiện dấu ✓ (không cộng vào chuỗi).
  *     + Không vào: hiện cỏ 4 lá 🍀 (thay cho băng).
  * - "Băng bảo vệ" (Streak Freeze): cứ mỗi 7 ngày liên tiếp được tặng 1 băng
- *   (tối đa 2).
+ *   (tối đa 3).
  * - Popup chúc mừng + pháo giấy khi tăng chuỗi (ngày làm việc), mốc lớn có
  *   lời chúc riêng. Cuối tuần không hiện popup.
  *
@@ -60,11 +60,13 @@ export interface StreakData {
   freezes: number;
   days: string[]; // các ngày đã vào (giữ 60 ngày gần nhất)
   frozenDays: string[]; // các ngày được băng bảo vệ
+  streakStart?: string; // ngày bắt đầu chuỗi hiện tại; ngày trước đó không còn tính cam
 }
 
 export interface Celebration {
   count: number;
   usedFreezes: number;
+  lostFreezes: number; // số băng đã dùng hết khi mất chuỗi
   earnedFreeze: boolean;
   restarted: boolean; // mất chuỗi cũ, bắt đầu lại
   previous: number;
@@ -77,6 +79,28 @@ const EMPTY: StreakData = {
   freezes: 0,
   days: [],
   frozenDays: [],
+  streakStart: "",
+};
+
+// Ngày bắt đầu chuỗi hiện tại. Nếu dữ liệu cũ chưa có streakStart thì suy ra
+// bằng cách đi lùi từ lastDate, đếm đủ `current` ngày làm việc đã vào.
+function getStreakStart(s: StreakData): string {
+  if (s.streakStart) return s.streakStart;
+  if (!s.lastDate || s.current <= 0) return "";
+  const visited = new Set(s.days);
+  let k = s.lastDate;
+  let count = visited.has(k) && !isWeekend(k) ? 1 : 0;
+  for (let i = 0; count < s.current && i < 400; i++) {
+    k = addDays(k, -1);
+    if (!isWeekend(k) && visited.has(k)) count++;
+  }
+  return k;
+}
+
+// Ngày có thuộc chuỗi hiện tại không
+const inStreak = (s: StreakData, k: string) => {
+  const start = getStreakStart(s);
+  return !start || k >= start;
 };
 
 /* ================= TIỆN ÍCH NGÀY ================= */
@@ -111,13 +135,15 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
   let current: number;
   let freezes = base.freezes;
   let usedFreezes = 0;
+  let lostFreezes = 0;
   let restarted = false;
-  const frozenDays = [...base.frozenDays];
+  let streakStart = base.streakStart || "";
+  let frozenDays = [...base.frozenDays];
 
   if (!base.lastDate) {
     current = 1;
+    streakStart = todayKey;
   } else {
-    // Các ngày làm việc bị bỏ lỡ nằm giữa lần vào trước và hôm nay
     const missed: string[] = [];
     let d = addDays(base.lastDate, 1);
     for (let i = 0; d < todayKey && i < 400; i++) {
@@ -133,8 +159,13 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
       frozenDays.push(...missed);
       current = base.current + 1;
     } else {
+      // Mất chuỗi: dùng hết băng, reset về 1, ngày cũ mất màu cam
       current = 1;
       restarted = base.current > 1;
+      lostFreezes = base.freezes;
+      freezes = 0;
+      frozenDays = [];
+      streakStart = todayKey;
     }
   }
 
@@ -151,11 +182,13 @@ function computeVisit(prev: StreakData | null, todayKey: string) {
     freezes,
     days: [...base.days, todayKey].slice(-60),
     frozenDays: frozenDays.slice(-30),
+    streakStart,
   };
 
   const celebration: Celebration = {
     count: current,
     usedFreezes,
+    lostFreezes,
     earnedFreeze,
     restarted,
     previous: base.current,
@@ -433,8 +466,8 @@ function WeekRow({ streak }: { streak: StreakData }) {
   return (
     <div className="grid grid-cols-7 gap-1.5">
       {weekKeys(todayKey).map((k, i) => {
-        const done = days.has(k);
-        const ice = frozen.has(k);
+        const done = days.has(k) && inStreak(streak, k);
+        const ice = frozen.has(k) && inStreak(streak, k);
         const weekend = isWeekend(k);
         const isToday = k === todayKey;
         const past = k < todayKey;
@@ -589,8 +622,8 @@ function StreakMonthCalendar({ streak }: { streak: StreakData }) {
     return rows;
   }, [year, month]);
 
-  // Một ngày được "thắp sáng" nếu đã vào hoặc được băng bảo vệ cứu
-  const lit = (k: string | null) => !!k && (done.has(k) || frozen.has(k));
+  // Chỉ ngày đã vào và thuộc chuỗi hiện tại mới nằm trong dải cam
+  const lit = (k: string | null) => !!k && done.has(k) && inStreak(streak, k);
 
   return (
     <div className="space-y-3">
@@ -656,12 +689,26 @@ function StreakMonthCalendar({ streak }: { streak: StreakData }) {
                 />
               ))}
 
+              {/* Ô băng bảo vệ: xanh băng, không nối vào dải cam */}
+              {row.map((k, ci) =>
+                k && frozen.has(k) && !done.has(k) && inStreak(streak, k) ? (
+                  <div
+                    key={`ice-${ci}`}
+                    className="absolute top-0.5 bottom-0.5 rounded-full bg-linear-to-b from-cyan-200 to-sky-400 ring-2 ring-sky-200 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
+                    style={{
+                      left: `calc(${(ci / 7) * 100}% + 2px)`,
+                      width: `calc(${100 / 7}% - 4px)`,
+                    }}
+                  />
+                ) : null,
+              )}
+
               {/* Số ngày */}
               {row.map((k, ci) => {
                 if (!k) return <span key={ci} className="relative z-10" />;
                 const dayNum = Number(k.slice(8));
-                const isDone = done.has(k);
-                const isIce = frozen.has(k) && !isDone;
+                const isDone = done.has(k) && inStreak(streak, k);
+                const isIce = frozen.has(k) && !isDone && inStreak(streak, k);
                 const isToday = k === todayKey;
                 const future = k > todayKey;
                 const weekend = isWeekend(k);
@@ -673,13 +720,15 @@ function StreakMonthCalendar({ streak }: { streak: StreakData }) {
                     key={ci}
                     title={k}
                     className={`relative z-10 flex items-center justify-center text-xs font-extrabold ${
-                      isDone || isIce
+                      isDone
                         ? "text-white"
-                        : isToday
-                          ? "text-orange-600"
-                          : future
-                            ? "text-slate-300"
-                            : "text-slate-400"
+                        : isIce
+                          ? "text-sky-700"
+                          : isToday
+                            ? "text-orange-600"
+                            : future
+                              ? "text-slate-300"
+                              : "text-slate-400"
                     }`}
                   >
                     {isIce ? (
@@ -869,7 +918,7 @@ export function StreakCelebration({
 
   return (
     <div
-      className="fixed inset-0 z-70 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+      className="fixed inset-0 z-70 flex items-center justify-center bg-slate-900/60 dark:bg-black/30 backdrop-blur-xs dark:backdrop-blur-none p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -918,6 +967,14 @@ export function StreakCelebration({
             Băng bảo vệ đã cứu chuỗi của bạn ({celebration.usedFreezes} ngày)
           </div>
         )}
+        {celebration.restarted && (
+          <div className="flex items-center justify-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-600 rounded-xl px-3 py-2 text-xs font-bold">
+            <SnowflakeIcon />
+            {celebration.lostFreezes > 0
+              ? `Đã dùng hết ${celebration.lostFreezes} băng bảo vệ nhưng không giữ được chuỗi`
+              : "Bạn không còn băng bảo vệ để giữ chuỗi"}
+          </div>
+        )}
         {celebration.earnedFreeze && (
           <div className="flex items-center justify-center gap-1.5 bg-sky-50 border border-sky-200 text-sky-700 rounded-xl px-3 py-2 text-xs font-bold">
             <SnowflakeIcon />
@@ -931,7 +988,7 @@ export function StreakCelebration({
           autoFocus
           className="w-full py-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-extrabold shadow-[0_4px_0_0_#c2410c] active:translate-y-0.5 active:shadow-[0_2px_0_0_#c2410c] transition-all cursor-pointer outline-none focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
         >
-          Tiếp tục
+          {celebration.restarted ? "OK" : "Tiếp tục"}
         </button>
       </div>
     </div>
