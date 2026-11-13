@@ -1,9 +1,9 @@
 /**
  * Cấu hình và logic thuần cho đánh giá học sinh tiểu học.
  *
- * Căn cứ: Thông tư 27/2020/TT-BGDĐT (đã được sửa đổi, bổ sung bởi Thông tư 89/2026/TT-BGDĐT).
+ * Căn cứ: Thông tư 27/2020/TT-BGDĐT (đã được sửa đổi, bổ sung bởi Thông tư 89/2026/TT-BGDĐT)
+ * và mẫu "BẢNG TỔNG HỢP KẾT QUẢ ĐÁNH GIÁ GIÁO DỤC" của trường (file lớp 4A4).
  * File này KHÔNG phụ thuộc React hay Firebase, nên dễ viết test và dễ sửa khi quy định đổi.
- * Khi Bộ thay đổi quy định, ưu tiên chỉ sửa ở đây (hằng số + suggestYearLevel).
  *
  * LƯU Ý: các ngưỡng và danh sách môn có kiểm tra định kì bên dưới cần đối chiếu
  * với văn bản hiện hành / hướng dẫn của Sở, Phòng GD&ĐT trước khi dùng chính thức.
@@ -27,6 +27,15 @@ export const periodLabel = (k: PeriodKey) =>
 
 export const GRADES = [1, 2, 3, 4, 5] as const;
 
+/**
+ * Mẫu của trường có cột "Tiếng dân tộc" ở cuối phần môn học ở cả 4 sheet.
+ * Cột này có thể để trống (không phải lớp nào cũng học).
+ */
+export const ETHNIC_LANG = "Tiếng dân tộc";
+
+/** Môn không bắt buộc: để trống cả lớp thì không bị tính là "thiếu dữ liệu". */
+export const OPTIONAL_SUBJECTS = [ETHNIC_LANG];
+
 const GRADE_1_2 = [
   "Tiếng Việt",
   "Toán",
@@ -36,6 +45,7 @@ const GRADE_1_2 = [
   "Nghệ thuật (Âm nhạc)",
   "Nghệ thuật (Mĩ thuật)",
   "Hoạt động trải nghiệm",
+  ETHNIC_LANG,
 ];
 
 const GRADE_3 = [
@@ -50,6 +60,7 @@ const GRADE_3 = [
   "Nghệ thuật (Âm nhạc)",
   "Nghệ thuật (Mĩ thuật)",
   "Hoạt động trải nghiệm",
+  ETHNIC_LANG,
 ];
 
 const GRADE_4_5 = [
@@ -65,9 +76,10 @@ const GRADE_4_5 = [
   "Nghệ thuật (Âm nhạc)",
   "Nghệ thuật (Mĩ thuật)",
   "Hoạt động trải nghiệm",
+  ETHNIC_LANG,
 ];
 
-/** Danh sách môn mặc định theo khối. Giáo viên vẫn thêm/bỏ được (VD tiếng dân tộc). */
+/** Danh sách môn mặc định theo khối. */
 export const SUBJECTS_BY_GRADE: Record<number, string[]> = {
   1: GRADE_1_2,
   2: GRADE_1_2,
@@ -79,6 +91,10 @@ export const SUBJECTS_BY_GRADE: Record<number, string[]> = {
 export const defaultSubjects = (grade: number): string[] => [
   ...(SUBJECTS_BY_GRADE[grade] ?? GRADE_4_5),
 ];
+
+/** Năm học tạo trước khi có cột "Tiếng dân tộc": thêm vào cuối nếu chưa có. */
+export const ensureDefaultSubjects = (subjects: string[]): string[] =>
+  subjects.includes(ETHNIC_LANG) ? subjects : [...subjects, ETHNIC_LANG];
 
 /**
  * Môn có cột "Điểm KTĐK" theo mẫu bảng tổng hợp của trường:
@@ -122,7 +138,7 @@ export const LEVEL_LABEL = Object.fromEntries(
   LEVELS.map((l) => [l.key, l.label]),
 ) as Record<LevelKey, string>;
 
-/** Ký hiệu ghi trong bảng tổng hợp */
+/** Ký hiệu ghi trong bảng tổng hợp: T / H / C */
 export const LEVEL_CODE: Record<LevelKey, string> = {
   HTT: "T",
   HT: "H",
@@ -138,9 +154,14 @@ export const TRAIT_LABEL: Record<Exclude<TraitLevel, "">, string> = {
   C: "Cần cố gắng",
 };
 
+/**
+ * Ký hiệu phẩm chất / năng lực theo mẫu của trường: T / H / C
+ * (file 4A4 dùng "H" cho mức Đạt, không dùng "Đ"). Khóa lưu trữ vẫn là "D"
+ * nên dữ liệu cũ trên Firestore không bị ảnh hưởng.
+ */
 export const TRAIT_CODE: Record<Exclude<TraitLevel, "">, string> = {
   T: "T",
-  D: "Đ",
+  D: "H",
   C: "C",
 };
 
@@ -176,6 +197,43 @@ export const TRAITS: { key: string; group: TraitGroup }[] = [
   { key: "Thể chất", group: "Năng lực đặc thù" },
 ];
 
+/** Tên ngắn dùng ở tiêu đề cột trong mẫu Excel của trường */
+export const TRAIT_SHORT: Record<string, string> = {
+  "Giải quyết vấn đề và sáng tạo": "GQVĐ và sáng tạo",
+};
+
+/* ======================= Đánh giá kết quả giáo dục cuối năm ======================= */
+
+/** Các cột "Đánh giá KQGD" của sheet CUỐI NĂM HỌC trong mẫu của trường */
+export type YearResultKey = "" | "xuat_sac" | "tot" | "hoan_thanh" | "chua";
+
+export const YEAR_RESULTS: {
+  key: Exclude<YearResultKey, "">;
+  label: string;
+}[] = [
+  { key: "xuat_sac", label: "Hoàn thành xuất sắc" },
+  { key: "tot", label: "Hoàn thành tốt" },
+  { key: "hoan_thanh", label: "Hoàn thành" },
+  { key: "chua", label: "Chưa hoàn thành" },
+];
+
+export interface YearEval {
+  result: YearResultKey;
+  /** Khen thưởng cuối năm */
+  rewardEnd: boolean;
+  /** Khen thưởng đột xuất */
+  rewardExtra: boolean;
+  /** Chưa được lên lớp */
+  retained: boolean;
+}
+
+export const EMPTY_YEAR_EVAL: YearEval = {
+  result: "",
+  rewardEnd: false,
+  rewardExtra: false,
+  retained: false,
+};
+
 /* ======================= Kiểu dữ liệu ======================= */
 
 /** Ô đánh giá của một môn trong một mốc. Điểm giữ dạng chuỗi để gõ dở không bị mất. */
@@ -191,6 +249,8 @@ export interface StudentData {
   traits: Record<string, Partial<Record<PeriodKey, TraitLevel>>>;
   /** Ghi chú chung của học sinh theo mốc (cột "Ghi chú" trong bảng tổng hợp) */
   notes: Partial<Record<PeriodKey, string>>;
+  /** Đánh giá KQGD, khen thưởng, chưa được lên lớp (chỉ sheet Cuối năm) */
+  yearEval?: YearEval;
 }
 
 export type StoredCell = {
@@ -203,6 +263,8 @@ export type StoredData = {
   subjects: Record<string, Record<string, Required<StoredCell>>>;
   traits: Record<string, Record<string, string>>;
   notes: Record<string, string>;
+  /** null khi chưa có gì (Firestore không nhận undefined) */
+  yearEval: YearEval | null;
 };
 
 /* ======================= Hàm tiện ích ======================= */
@@ -271,6 +333,20 @@ export const withNote = (
   v: string,
 ): StudentData => ({ ...d, notes: { ...d.notes, [p]: v } });
 
+export const getYearEval = (d: StudentData | undefined): YearEval =>
+  d?.yearEval ?? EMPTY_YEAR_EVAL;
+
+export const withYearEval = (
+  d: StudentData,
+  patch: Partial<YearEval>,
+): StudentData => ({
+  ...d,
+  yearEval: { ...(d.yearEval ?? EMPTY_YEAR_EVAL), ...patch },
+});
+
+const hasYearEval = (y?: YearEval) =>
+  !!y && (!!y.result || y.rewardEnd || y.rewardExtra || y.retained);
+
 /** Mốc này đã có dữ liệu nhập chưa (dùng để quyết định xuất sheet nào). */
 export const hasPeriodData = (d: StudentData | undefined, p: PeriodKey) =>
   !!d &&
@@ -279,12 +355,17 @@ export const hasPeriodData = (d: StudentData | undefined, p: PeriodKey) =>
     return !!c && (!!c.level || c.score !== "" || !!c.note.trim());
   }) ||
     Object.values(d.traits).some((per) => !!per[p]) ||
-    !!d.notes?.[p]?.trim());
+    !!d.notes?.[p]?.trim() ||
+    (p === "cn" && hasYearEval(d.yearEval)));
 
 const asLevel = (s?: string): Level =>
   s === "HTT" || s === "HT" || s === "CHT" || s === "MIEN" ? s : "";
 const asTrait = (s?: string): TraitLevel =>
   s === "T" || s === "D" || s === "C" ? s : "";
+const asYearResult = (s?: string): YearResultKey =>
+  s === "xuat_sac" || s === "tot" || s === "hoan_thanh" || s === "chua"
+    ? s
+    : "";
 
 export const toTraitLevel = asTrait;
 
@@ -293,6 +374,7 @@ export const fromStored = (
   subjects?: Record<string, Record<string, StoredCell>>,
   traits?: Record<string, Record<string, string>>,
   notes?: Record<string, string>,
+  yearEval?: Partial<YearEval> | null,
 ): StudentData => {
   const out = emptyData();
   Object.entries(subjects || {}).forEach(([sub, per]) => {
@@ -318,6 +400,15 @@ export const fromStored = (
     const n = notes?.[key];
     if (n) out.notes[key] = n;
   });
+  if (yearEval) {
+    const y: YearEval = {
+      result: asYearResult(yearEval.result),
+      rewardEnd: !!yearEval.rewardEnd,
+      rewardExtra: !!yearEval.rewardExtra,
+      retained: !!yearEval.retained,
+    };
+    if (hasYearEval(y)) out.yearEval = y;
+  }
   return out;
 };
 
@@ -344,7 +435,12 @@ export const toStored = (d: StudentData): StoredData => {
   Object.entries(d.notes ?? {}).forEach(([p, v]) => {
     if (v && v.trim()) notes[p] = v.trim();
   });
-  return { subjects, traits, notes };
+  return {
+    subjects,
+    traits,
+    notes,
+    yearEval: hasYearEval(d.yearEval) ? { ...d.yearEval! } : null,
+  };
 };
 
 /* ======================= Gợi ý mức tổng hợp cuối năm ======================= */
@@ -358,6 +454,20 @@ export type YearLevelKey =
 
 /** Ngưỡng điểm kiểm tra định kì cuối năm. Đối chiếu văn bản hiện hành trước khi dùng chính thức. */
 export const YEAR_LEVEL_THRESHOLDS = { excellent: 9, good: 7, pass: 5 };
+
+/** Đổi gợi ý sang cột "Đánh giá KQGD" của mẫu; null nếu chưa đủ dữ liệu. */
+export const yearLevelToResult = (
+  l: YearLevelKey,
+): Exclude<YearResultKey, ""> | null =>
+  l === "excellent"
+    ? "xuat_sac"
+    : l === "good"
+      ? "tot"
+      : l === "pass"
+        ? "hoan_thanh"
+        : l === "fail"
+          ? "chua"
+          : null;
 
 export interface YearSuggestion {
   level: YearLevelKey;
@@ -376,13 +486,16 @@ export interface YearSuggestion {
 
 /**
  * Chỉ là GỢI Ý để giáo viên đối chiếu; giáo viên quyết định mức cuối cùng.
- * Môn được miễn không tính vào điều kiện.
+ * Môn được miễn không tính vào điều kiện. Môn không bắt buộc (Tiếng dân tộc)
+ * để trống thì bỏ qua.
  */
 export const suggestYearLevel = (
   d: StudentData | undefined,
   subjects: string[],
 ): YearSuggestion => {
-  const cells = subjects.map((s) => ({ s, c: getCell(d, s, "cn") }));
+  const cells = subjects
+    .map((s) => ({ s, c: getCell(d, s, "cn") }))
+    .filter((x) => !(OPTIONAL_SUBJECTS.includes(x.s) && !x.c.level));
   const active = cells.filter((x) => x.c.level !== "MIEN");
   const traits = TRAITS.map((t) => getTrait(d, t.key, "cn"));
 

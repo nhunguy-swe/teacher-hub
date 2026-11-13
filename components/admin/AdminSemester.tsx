@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { useToast } from "@/components/ToastProvider";
 import {
   collection,
@@ -29,25 +29,32 @@ import {
   TRAIT_CODE,
   TRAIT_GROUP_TITLE,
   TRAIT_LABEL,
+  YEAR_RESULTS, // + thêm
   defaultSubjects,
+  ensureDefaultSubjects, // + thêm
   emptyData,
   fromStored,
   getCell,
   getNote,
   getTrait,
+  getYearEval, // + thêm
   hasTest,
   parseScore,
   periodLabel,
+  suggestYearLevel, // + thêm
   toStored,
   toTraitLevel,
   withCell,
   withNote,
   withTrait,
+  withYearEval, // + thêm
+  yearLevelToResult, // + thêm
   type LevelKey,
   type PeriodKey,
   type StudentData,
   type SubjectCell,
   type TraitLevel,
+  type YearEval, // + thêm
 } from "@/lib/primaryAssessment";
 import {
   buildAssessmentWorkbook,
@@ -56,6 +63,7 @@ import {
 import {
   applyImport,
   parseWorkbook,
+  toXlsxBuffer, // + thêm
   type ImportRow,
 } from "@/lib/importPrimaryAssessment";
 
@@ -127,6 +135,12 @@ const LEVEL_STYLE: Record<LevelKey, { on: string; chip: string }> = {
   },
 };
 
+const TRAIT_ON: Record<"T" | "D" | "C", string> = {
+  T: "bg-emerald-500 text-white border-emerald-500",
+  D: "bg-sky-500 text-white border-sky-500",
+  C: "bg-rose-500 text-white border-rose-500",
+};
+
 const TONE_LABEL: Record<CommentTone, string> = {
   short: "Ngắn gọn (sổ liên lạc)",
   detailed: "Chi tiết",
@@ -144,8 +158,11 @@ const SELECT =
   "text-xs font-bold text-slate-700 bg-white border border-amber-300 rounded-lg px-3 py-2 focus:outline-none focus:border-amber-400 cursor-pointer disabled:opacity-60";
 const INPUT =
   "w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none";
-const CELL_INPUT =
-  "h-10 text-base rounded-lg border border-slate-200 bg-white text-slate-800 px-1 appearance-none text-center focus:outline-none focus:border-amber-400 disabled:bg-slate-50 disabled:text-slate-400";
+// Phần khung, không chứa màu nền/chữ/viền
+const CELL_BASE =
+  "h-10 rounded-lg border px-1 appearance-none text-center focus:outline-none focus:border-amber-400 disabled:opacity-60";
+// Màu khi ô chưa có giá trị
+const CELL_IDLE = "bg-white text-slate-800 border-slate-200";
 const TH_X =
   "text-slate-700! bg-slate-100! p-1 font-bold text-xs text-center border border-slate-300";
 const TH_S =
@@ -180,7 +197,7 @@ const getTodayKey = () => {
 
 const formatDMY = (key: string) => key.split("-").reverse().join("/");
 
-const DEFAULT_SCHOOL = "TH số 1 Hoài Nhơn Đông";
+const DEFAULT_SCHOOL = "Trường Tiểu học số 1 Hoài Nhơn Đông";
 
 const readBirthDate = (x: Record<string, unknown>) => {
   const v = x.birthDate ?? x.dob ?? x.dateOfBirth ?? x.birthday;
@@ -291,7 +308,10 @@ export default function AdminSemester() {
   const inputsOff = locked || saving;
 
   const subjectList = useMemo(
-    () => year?.subjects ?? defaultSubjects(year?.grade ?? 4),
+    () =>
+      ensureDefaultSubjects(
+        year?.subjects ?? defaultSubjects(year?.grade ?? 4),
+      ),
     [year],
   );
 
@@ -309,6 +329,7 @@ export default function AdminSemester() {
   const subjSpan = subjCols.reduce((a, c) => a + (c.tested ? 2 : 1), 0);
   const traitsOf = (g: string) => TRAITS.filter((t) => t.group === g);
   const coreTraits = TRAITS.filter((t) => t.group !== "Phẩm chất");
+  const isCN = period === "cn";
 
   /* ---------- Đăng ký dữ liệu Firestore ---------- */
 
@@ -375,7 +396,7 @@ export default function AdminSemester() {
           const x = d.data();
           const sid = x.studentId as string;
           if (dirtyRef.current.has(sid)) return;
-          next[sid] = fromStored(x.subjects, x.traits, x.notes);
+          next[sid] = fromStored(x.subjects, x.traits, x.notes, x.yearEval);
         });
         return next;
       });
@@ -628,6 +649,37 @@ export default function AdminSemester() {
   const setNote = (sid: string, v: string) =>
     updateData(sid, (d) => withNote(d, period, v));
 
+  const patchYearEval = (sid: string, patch: Partial<YearEval>) =>
+    updateData(sid, (d) => withYearEval(d, patch));
+
+  // Điền sẵn cột "Đánh giá KQGD" cho học sinh đã đủ dữ liệu cuối năm và chưa có kết quả.
+  // Chỉ là gợi ý, giáo viên sửa lại được.
+  const handleSuggestYear = () => {
+    if (locked) return;
+    const updates: Record<string, StudentData> = {};
+    let skipped = 0;
+    students.forEach((st) => {
+      const cur = data[st.id] ?? emptyData();
+      if (getYearEval(cur).result) return;
+      const r = yearLevelToResult(suggestYearLevel(cur, subjectList).level);
+      if (!r) {
+        skipped++;
+        return;
+      }
+      updates[st.id] = withYearEval(cur, { result: r });
+    });
+    const ids = Object.keys(updates);
+    if (ids.length === 0) {
+      toast.warning("Chưa có học sinh nào đủ dữ liệu để gợi ý");
+      return;
+    }
+    setData((prev) => ({ ...prev, ...updates }));
+    markDirty(ids);
+    toast.success(
+      `Đã gợi ý cho ${ids.length} học sinh${skipped ? `, ${skipped} em còn thiếu dữ liệu` : ""}. Hãy kiểm tra rồi lưu!`,
+    );
+  };
+
   const focusScore = (c: number, r: number) => {
     const el = tableRef.current?.querySelector<HTMLInputElement>(
       `[data-score="${c}-${r}"]`,
@@ -653,12 +705,9 @@ export default function AdminSemester() {
         invalid++;
         return;
       }
-      updates[st.id] = withCell(
-        updates[st.id] ?? data[st.id] ?? emptyData(),
-        sub,
-        period,
-        { score: v },
-      );
+      const cur = updates[st.id] ?? data[st.id] ?? emptyData();
+      if (getCell(cur, sub, period).level === "MIEN") return;
+      updates[st.id] = withCell(cur, sub, period, { score: v });
     });
     const ids = Object.keys(updates);
     if (ids.length > 0) {
@@ -674,9 +723,13 @@ export default function AdminSemester() {
     setSaving(true);
     try {
       const batch = writeBatch(db);
+      let skipped = 0;
       dirty.forEach((sid) => {
         const st = students.find((s) => s.id === sid);
-        if (!st) return;
+        if (!st) {
+          skipped++;
+          return;
+        }
         const stored = toStored(data[sid] ?? emptyData());
         batch.set(doc(db, "semesterGrades", `${year.id}_${sid}`), {
           semesterId: year.id,
@@ -686,13 +739,18 @@ export default function AdminSemester() {
           subjects: stored.subjects,
           traits: stored.traits,
           notes: stored.notes,
+          yearEval: stored.yearEval,
           updatedAt: serverTimestamp(),
         });
       });
       await batch.commit();
       dirtyRef.current = new Set();
       setDirty(new Set());
-      toast.success("Đã lưu đánh giá!");
+      if (skipped > 0)
+        toast.warning(
+          `${skipped} học sinh không còn trong danh sách nên không được lưu`,
+        );
+      else toast.success("Đã lưu đánh giá!");
     } catch (err) {
       console.error(err);
       toast.error("Không thể lưu đánh giá");
@@ -716,6 +774,10 @@ export default function AdminSemester() {
         students,
         data,
         comments,
+        signDate: (() => {
+          const d = new Date();
+          return `Ngày ${d.getDate()} tháng ${d.getMonth() + 1} năm ${d.getFullYear()}`;
+        })(),
       });
       saveBlob(blob, `Danh-gia-${fileSafe(year.name)}-${getTodayKey()}.xlsx`);
       toast.success("Đã xuất bảng tổng hợp!");
@@ -770,7 +832,7 @@ export default function AdminSemester() {
     if (!file || locked) return;
     setImporting(true);
     try {
-      const sheets = await parseWorkbook(await file.arrayBuffer(), subjectList);
+      const sheets = await parseWorkbook(await toXlsxBuffer(file), subjectList);
       if (sheets.length === 0) {
         toast.error("Không nhận ra bảng đánh giá trong file này");
         return;
@@ -897,9 +959,15 @@ export default function AdminSemester() {
           attendance[a.status as keyof typeof attendance]++;
       });
 
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) throw new Error("Chưa đăng nhập");
+
     const res = await fetch(`${API_BASE}/api/student-comment`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         mode: "semester",
         stage: "primary",
@@ -1403,7 +1471,7 @@ export default function AdminSemester() {
                     <input
                       ref={fileRef}
                       type="file"
-                      accept=".xlsx,.xlsm"
+                      accept=".xlsx,.xlsm,.xls"
                       className="hidden"
                       onChange={handleImportFile}
                     />
@@ -1422,6 +1490,16 @@ export default function AdminSemester() {
                     >
                       {expanded ? "✕ Thu nhỏ" : "⛶ Phóng to"}
                     </button>
+                    {isCN && (
+                      <button
+                        type="button"
+                        disabled={inputsOff}
+                        onClick={handleSuggestYear}
+                        className={BTN_INDIGO}
+                      >
+                        Gợi ý KQGD
+                      </button>
+                    )}
                     {exportBtn}
                     <button
                       type="button"
@@ -1441,7 +1519,7 @@ export default function AdminSemester() {
                 >
                   Môn: T = Hoàn thành tốt · H = Hoàn thành · C = Chưa hoàn thành
                   · Miễn = được miễn theo kế hoạch giáo dục cá nhân. Phẩm chất,
-                  năng lực: T = Tốt · Đ = Đạt · C = Cần cố gắng. Điểm KTĐK là số
+                  năng lực: T = Tốt · H = Đạt · C = Cần cố gắng. Điểm KTĐK là số
                   nguyên 0-10: có thể dán cả cột điểm từ Excel vào ô đầu tiên,
                   hoặc dùng Enter và mũi tên để xuống ô dưới.
                 </p>
@@ -1487,6 +1565,19 @@ export default function AdminSemester() {
                         <th colSpan={coreTraits.length} className={TH_X}>
                           Năng lực cốt lõi
                         </th>
+                        {isCN && (
+                          <>
+                            <th colSpan={4} rowSpan={2} className={TH_X}>
+                              Đánh giá KQGD
+                            </th>
+                            <th colSpan={2} rowSpan={2} className={TH_X}>
+                              Khen thưởng
+                            </th>
+                            <th rowSpan={3} className={`${TH_S} w-16`}>
+                              Chưa được lên lớp
+                            </th>
+                          </>
+                        )}
                         <th rowSpan={3} className={`${TH_X} min-w-48`}>
                           Ghi chú
                         </th>
@@ -1537,13 +1628,30 @@ export default function AdminSemester() {
                             {t.key}
                           </th>
                         ))}
+                        {isCN && (
+                          <>
+                            {YEAR_RESULTS.map((y) => (
+                              <th
+                                key={y.key}
+                                className={TH_S}
+                                style={{ minWidth: 56 }}
+                              >
+                                {y.label}
+                              </th>
+                            ))}
+                            <th className={TH_S}>Cuối năm</th>
+                            <th className={TH_S}>Đột xuất</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {filteredStudents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5 + subjSpan + TRAITS.length}
+                            colSpan={
+                              5 + subjSpan + TRAITS.length + (isCN ? 7 : 0)
+                            }
                             className="text-center text-slate-400 py-8"
                           >
                             Không tìm thấy học sinh phù hợp.
@@ -1552,6 +1660,7 @@ export default function AdminSemester() {
                       ) : (
                         filteredStudents.map((st, r) => {
                           const d = data[st.id];
+                          const y = getYearEval(d);
                           return (
                             <tr
                               key={st.id}
@@ -1600,11 +1709,11 @@ export default function AdminSemester() {
                                               | LevelKey,
                                           })
                                         }
-                                        className={`${CELL_INPUT} w-16 cursor-pointer font-bold ${
+                                        className={`${CELL_BASE} w-16 cursor-pointer font-bold ${
                                           c.level === "MIEN"
                                             ? "text-[11px]"
-                                            : ""
-                                        } ${c.level ? LEVEL_STYLE[c.level].on : ""}`}
+                                            : "text-base"
+                                        } ${c.level ? LEVEL_STYLE[c.level].on : CELL_IDLE}`}
                                       >
                                         <option value="">-</option>
                                         {LEVELS.map((l) => (
@@ -1656,7 +1765,7 @@ export default function AdminSemester() {
                                               focusScore(ci, r - 1);
                                             }
                                           }}
-                                          className={`${CELL_INPUT} w-16 text-center font-semibold`}
+                                          className={`${CELL_BASE} ${CELL_IDLE} w-16 text-base font-semibold`}
                                         />
                                       </td>
                                     )}
@@ -1679,14 +1788,8 @@ export default function AdminSemester() {
                                           toTraitLevel(e.target.value),
                                         )
                                       }
-                                      className={`${CELL_INPUT} w-14 cursor-pointer font-bold ${
-                                        v === "C"
-                                          ? "bg-rose-500 text-white border-rose-500"
-                                          : v === "T"
-                                            ? "bg-emerald-500 text-white border-emerald-500"
-                                            : v === "D"
-                                              ? "bg-sky-500 text-white border-sky-500"
-                                              : ""
+                                      className={`${CELL_BASE} w-14 cursor-pointer text-base font-bold ${
+                                        v ? TRAIT_ON[v] : CELL_IDLE
                                       }`}
                                     >
                                       <option value="">-</option>
@@ -1700,6 +1803,52 @@ export default function AdminSemester() {
                                 );
                               })}
 
+                              {isCN && (
+                                <>
+                                  {/* chọn một trong bốn; bấm lại để bỏ chọn */}
+                                  {YEAR_RESULTS.map((o) => (
+                                    <CheckCell
+                                      key={o.key}
+                                      checked={y.result === o.key}
+                                      disabled={inputsOff}
+                                      onChange={() =>
+                                        patchYearEval(st.id, {
+                                          result:
+                                            y.result === o.key ? "" : o.key,
+                                        })
+                                      }
+                                    />
+                                  ))}
+                                  <CheckCell
+                                    checked={y.rewardEnd}
+                                    disabled={inputsOff}
+                                    onChange={() =>
+                                      patchYearEval(st.id, {
+                                        rewardEnd: !y.rewardEnd,
+                                      })
+                                    }
+                                  />
+                                  <CheckCell
+                                    checked={y.rewardExtra}
+                                    disabled={inputsOff}
+                                    onChange={() =>
+                                      patchYearEval(st.id, {
+                                        rewardExtra: !y.rewardExtra,
+                                      })
+                                    }
+                                  />
+                                  <CheckCell
+                                    checked={y.retained}
+                                    disabled={inputsOff}
+                                    onChange={() =>
+                                      patchYearEval(st.id, {
+                                        retained: !y.retained,
+                                      })
+                                    }
+                                  />
+                                </>
+                              )}
+
                               <td className={TD_X}>
                                 <input
                                   type="text"
@@ -1709,7 +1858,7 @@ export default function AdminSemester() {
                                     setNote(st.id, e.target.value)
                                   }
                                   placeholder="Ghi chú..."
-                                  className={`${CELL_INPUT} w-full min-w-64`}
+                                  className={`${CELL_BASE} ${CELL_IDLE} w-full min-w-64 text-xs`}
                                 />
                               </td>
                             </tr>
@@ -2046,5 +2195,27 @@ function FragmentCells({
       <th className={TH_S}>Mức</th>
       {tested && <th className={TH_S}>Điểm</th>}
     </>
+  );
+}
+
+function CheckCell({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <td className={TD_X}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="w-4 h-4 accent-amber-500 cursor-pointer"
+      />
+    </td>
   );
 }
