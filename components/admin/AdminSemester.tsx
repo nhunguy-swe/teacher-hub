@@ -114,31 +114,33 @@ interface AttendanceLite {
 
 type Tab = "years" | "grid" | "comments";
 
+const VIEW_KEY = "adminSemester:view";
+
 /* ======================= Giao diện ======================= */
 
 const LEVEL_STYLE: Record<LevelKey, { on: string; chip: string }> = {
   HTT: {
-    on: "bg-emerald-500 text-white border-emerald-500",
+    on: "bg-emerald-500! text-white! border-emerald-500!",
     chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
   },
   HT: {
-    on: "bg-sky-500 text-white border-sky-500",
+    on: "bg-sky-500! text-white! border-sky-500!",
     chip: "bg-sky-50 text-sky-700 border-sky-200",
   },
   CHT: {
-    on: "bg-rose-500 text-white border-rose-500",
+    on: "bg-rose-500! text-white! border-rose-500!",
     chip: "bg-rose-50 text-rose-700 border-rose-200",
   },
   MIEN: {
-    on: "bg-slate-500 text-white border-slate-500",
+    on: "bg-slate-500! text-white! border-slate-500!",
     chip: "bg-slate-50 text-slate-600 border-slate-200",
   },
 };
 
 const TRAIT_ON: Record<"T" | "D" | "C", string> = {
-  T: "bg-emerald-500 text-white border-emerald-500",
-  D: "bg-sky-500 text-white border-sky-500",
-  C: "bg-rose-500 text-white border-rose-500",
+  T: "bg-emerald-500! text-white! border-emerald-500!",
+  D: "bg-sky-500! text-white! border-sky-500!",
+  C: "bg-rose-500! text-white! border-rose-500!",
 };
 
 const TONE_LABEL: Record<CommentTone, string> = {
@@ -160,9 +162,9 @@ const INPUT =
   "w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs font-medium focus:border-amber-400 focus:outline-none";
 // Phần khung, không chứa màu nền/chữ/viền
 const CELL_BASE =
-  "h-10 rounded-lg border px-1 appearance-none text-center focus:outline-none focus:border-amber-400 disabled:opacity-60";
+  "h-10 rounded-lg border px-0.5! bg-none! appearance-none text-center focus:outline-none focus:border-amber-400 disabled:opacity-60";
 // Màu khi ô chưa có giá trị
-const CELL_IDLE = "bg-white text-slate-800 border-slate-200";
+const CELL_IDLE = "bg-white! text-slate-800! border-slate-200!";
 const TH_X =
   "text-slate-700! bg-slate-100! p-1 font-bold text-xs text-center border border-slate-300";
 const TH_S =
@@ -245,16 +247,38 @@ const deleteInChunks = async (docs: { ref: DocumentReference }[]) => {
 
 const subjectShort = (s: string) => s.replace("(Công nghệ)", "(CN)");
 
+const readSavedView = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return {
+      tab:
+        s.tab === "years" || s.tab === "grid" || s.tab === "comments"
+          ? (s.tab as Tab)
+          : null,
+      period: PERIODS.some((p) => p.key === s.period)
+        ? (s.period as PeriodKey)
+        : null,
+      yearId: typeof s.yearId === "string" ? s.yearId : "",
+    };
+  } catch {
+    return null;
+  }
+};
+
 /* ======================= Component chính ======================= */
 
 export default function AdminSemester() {
   const toast = useToast();
 
-  const [tab, setTab] = useState<Tab>("years");
-  const [period, setPeriod] = useState<PeriodKey>("gk1");
+  const [saved] = useState(readSavedView);
+  const [tab, setTab] = useState<Tab>(saved?.tab ?? "years");
+  const [period, setPeriod] = useState<PeriodKey>(saved?.period ?? "gk1");
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [years, setYears] = useState<YearItem[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(saved?.yearId ?? "");
 
   const [data, setData] = useState<Record<string, StudentData>>({});
   const [dirty, setDirty] = useState<Set<string>>(new Set());
@@ -267,7 +291,7 @@ export default function AdminSemester() {
   const [savingComments, setSavingComments] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [picked, setPicked] = useState(false); // giáo viên đã chọn mốc chưa
+  const [picked, setPicked] = useState(true); // mặc định vào thẳng mốc đầu tiên (Giữa HK1)
   const [expanded, setExpanded] = useState(false); // bảng đang phóng to
 
   const [importing, setImporting] = useState(false);
@@ -294,7 +318,8 @@ export default function AdminSemester() {
   } | null>(null);
 
   const tableRef = useRef<HTMLDivElement>(null);
-  const tabInitRef = useRef(false);
+  // đã có tab lưu sẵn thì đừng tự nhảy sang "Bảng đánh giá"
+  const tabInitRef = useRef(!!saved?.tab);
 
   const year = useMemo(
     () =>
@@ -330,6 +355,18 @@ export default function AdminSemester() {
   const traitsOf = (g: string) => TRAITS.filter((t) => t.group === g);
   const coreTraits = TRAITS.filter((t) => t.group !== "Phẩm chất");
   const isCN = period === "cn";
+
+  // Lưu lại mỗi khi đổi
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        VIEW_KEY,
+        JSON.stringify({ tab, period, yearId: selectedId }),
+      );
+    } catch {
+      /* bỏ qua */
+    }
+  }, [tab, period, selectedId]);
 
   /* ---------- Đăng ký dữ liệu Firestore ---------- */
 
@@ -1126,13 +1163,8 @@ export default function AdminSemester() {
             type="button"
             disabled={batchProgress !== null}
             onClick={() => {
-              if (on) {
-                setPicked(false);
-                setExpanded(false);
-              } else {
-                setPeriod(p.key);
-                setPicked(true);
-              }
+              setPeriod(p.key);
+              setPicked(true);
             }}
             className={`px-3 py-1.5 text-xs font-bold rounded-full border cursor-pointer transition-all disabled:opacity-60 disabled:cursor-default ${
               on
@@ -1588,7 +1620,7 @@ export default function AdminSemester() {
                             key={sub}
                             colSpan={tested ? 2 : 1}
                             className={TH_S}
-                            style={{ minWidth: tested ? 120 : 60 }}
+                            style={{ minWidth: tested ? 128 : 64 }}
                           >
                             {subjectShort(sub)}
                           </th>
@@ -1693,7 +1725,10 @@ export default function AdminSemester() {
                                 const c = getCell(d, sub, period);
                                 return (
                                   <FragmentCells key={sub} body>
-                                    <td className={TD_X}>
+                                    <td
+                                      className={TD_X}
+                                      style={{ minWidth: 64 }}
+                                    >
                                       <select
                                         value={c.level}
                                         disabled={inputsOff}
@@ -1726,7 +1761,10 @@ export default function AdminSemester() {
                                       </select>
                                     </td>
                                     {tested && (
-                                      <td className={TD_X}>
+                                      <td
+                                        className={TD_X}
+                                        style={{ minWidth: 64 }}
+                                      >
                                         <input
                                           data-score={`${ci}-${r}`}
                                           type="text"
