@@ -29,32 +29,32 @@ import {
   TRAIT_CODE,
   TRAIT_GROUP_TITLE,
   TRAIT_LABEL,
-  YEAR_RESULTS,  
+  YEAR_RESULTS,
   defaultSubjects,
-  ensureDefaultSubjects,  
+  ensureDefaultSubjects,
   emptyData,
   fromStored,
   getCell,
   getNote,
   getTrait,
-  getYearEval,  
+  getYearEval,
   hasTest,
   parseScore,
   periodLabel,
-  suggestYearLevel,  
+  suggestYearLevel,
   toStored,
   toTraitLevel,
   withCell,
   withNote,
   withTrait,
-  withYearEval,  
-  yearLevelToResult,  
+  withYearEval,
+  yearLevelToResult,
   type LevelKey,
   type PeriodKey,
   type StudentData,
   type SubjectCell,
   type TraitLevel,
-  type YearEval,  
+  type YearEval,
 } from "@/lib/primaryAssessment";
 import {
   buildAssessmentWorkbook,
@@ -63,9 +63,10 @@ import {
 import {
   applyImport,
   parseWorkbook,
-  toXlsxBuffer,  
+  toXlsxBuffer,
   type ImportRow,
 } from "@/lib/importPrimaryAssessment";
+import { createPortal } from "react-dom";
 
 /* ======================= Kiểu dữ liệu ======================= */
 
@@ -525,11 +526,23 @@ export default function AdminSemester() {
 
   useEffect(() => {
     if (!expanded) return;
+    const body = document.body;
+    const prevOverflow = body.style.overflow;
+    const prevPaddingRight = body.style.paddingRight;
+    const scrollbarW = window.innerWidth - document.documentElement.clientWidth;
+
+    body.style.overflow = "hidden";
+    if (scrollbarW > 0) body.style.paddingRight = `${scrollbarW}px`;
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setExpanded(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      body.style.overflow = prevOverflow;
+      body.style.paddingRight = prevPaddingRight;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [expanded]);
 
   // handleSelectYear -> chuyển thành async
@@ -1143,6 +1156,26 @@ export default function AdminSemester() {
     markCommentDirty(key);
   };
 
+  const handleDeleteComment = async (sid: string) => {
+    if (locked) return;
+    const key = ckey(sid, period);
+    if (!comments[key]?.text?.trim()) return;
+    const ok = await askConfirm({
+      title: "Xóa nhận xét?",
+      message:
+        'Nhận xét của học sinh này ở mốc đang chọn sẽ bị xóa sau khi bấm "Lưu nhận xét". Tiếp tục?',
+      confirmText: "Xóa",
+      icon: "🗑️",
+      tone: "rose",
+    });
+    if (!ok) return;
+    setComments((prev) => ({
+      ...prev,
+      [key]: { text: "", source: "manual", status: "draft" },
+    }));
+    markCommentDirty(key);
+  };
+
   const handleSaveComments = async () => {
     if (!year || dirtyComments.size === 0) return;
     setSavingComments(true);
@@ -1539,194 +1572,196 @@ export default function AdminSemester() {
         (!year ? (
           needYear
         ) : (
-          <div
-            className={
-              expanded
-                ? "fixed inset-0 z-50 bg-white p-4 flex flex-col gap-3"
-                : "space-y-4"
-            }
-          >
-            {periodPills}
+          <MaybePortal active={expanded}>
+            <div
+              className={
+                expanded
+                  ? "fixed inset-0 z-50 bg-white p-4 flex flex-col gap-3 h-dvh"
+                  : "space-y-4"
+              }
+            >
+              {periodPills}
 
-            {picked ? (
-              <>
-                <div className="flex flex-wrap items-center gap-2 justify-between">
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Tìm học sinh..."
-                    className={SEARCH}
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
+              {picked ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2 justify-between">
                     <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".xlsx,.xlsm,.xls"
-                      className="hidden"
-                      onChange={handleImportFile}
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Tìm học sinh..."
+                      className={SEARCH}
                     />
-                    <button
-                      type="button"
-                      disabled={inputsOff || importing}
-                      onClick={() => fileRef.current?.click()}
-                      className={BTN_INDIGO}
-                    >
-                      {importing ? "Đang đọc..." : "Nhập file Excel"}
-                    </button>
-                    {isCN && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept=".xlsx,.xlsm,.xls"
+                        className="hidden"
+                        onChange={handleImportFile}
+                      />
                       <button
                         type="button"
-                        disabled={inputsOff}
-                        onClick={handleSuggestYear}
+                        disabled={inputsOff || importing}
+                        onClick={() => fileRef.current?.click()}
                         className={BTN_INDIGO}
                       >
-                        Gợi ý KQGD
+                        {importing ? "Đang đọc..." : "Nhập file Excel"}
                       </button>
-                    )}
-                    {exportBtn}
+                      {isCN && (
+                        <button
+                          type="button"
+                          disabled={inputsOff}
+                          onClick={handleSuggestYear}
+                          className={BTN_INDIGO}
+                        >
+                          Gợi ý KQGD
+                        </button>
+                      )}
+                      {exportBtn}
+                      <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={locked || dirty.size === 0 || saving}
+                        className={BTN_AMBER}
+                      >
+                        {saveLabel(dirty.size, "Lưu đánh giá", saving)}
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={handleSave}
-                      disabled={locked || dirty.size === 0 || saving}
-                      className={BTN_AMBER}
+                      onClick={() => setExpanded((v) => !v)}
+                      title={expanded ? "Thu nhỏ" : "Phóng to"}
+                      className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-none shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                     >
-                      {saveLabel(dirty.size, "Lưu đánh giá", saving)}
+                      {expanded ? (
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                        </svg>
+                      ) : (
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                          />
+                        </svg>
+                      )}
+                      <span>{expanded ? "Thu nhỏ" : "Phóng to"}</span>
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((v) => !v)}
-                    title={expanded ? "Thu nhỏ" : "Phóng to"}
-                    className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  <p
+                    className={`text-[11px] text-slate-400 m-0 ${
+                      expanded ? "hidden" : ""
+                    }`}
                   >
-                    {expanded ? (
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
-                      </svg>
-                    ) : (
-                      <svg
-                        width="16"
-                        height="16"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-                        />
-                      </svg>
-                    )}
-                    <span>{expanded ? "Thu nhỏ" : "Phóng to"}</span>
-                  </button>
-                </div>
+                    Môn: T = Hoàn thành tốt · H = Hoàn thành · C = Chưa hoàn
+                    thành · Miễn = được miễn theo kế hoạch giáo dục cá nhân.
+                    Phẩm chất, năng lực: T = Tốt · H = Đạt · C = Cần cố gắng.
+                    Điểm KTĐK là số nguyên 0-10: có thể dán cả cột điểm từ Excel
+                    vào ô đầu tiên, hoặc dùng Enter và mũi tên để xuống ô dưới.
+                  </p>
 
-                <p
-                  className={`text-[11px] text-slate-400 m-0 ${
-                    expanded ? "hidden" : ""
-                  }`}
-                >
-                  Môn: T = Hoàn thành tốt · H = Hoàn thành · C = Chưa hoàn thành
-                  · Miễn = được miễn theo kế hoạch giáo dục cá nhân. Phẩm chất,
-                  năng lực: T = Tốt · H = Đạt · C = Cần cố gắng. Điểm KTĐK là số
-                  nguyên 0-10: có thể dán cả cột điểm từ Excel vào ô đầu tiên,
-                  hoặc dùng Enter và mũi tên để xuống ô dưới.
-                </p>
-
-                <div
-                  ref={tableRef}
-                  className={`border border-slate-300 rounded-xl overflow-auto ${
-                    expanded ? "flex-1 min-h-0" : "max-h-[80vh]"
-                  }`}
-                >
-                  <table className="border-collapse text-xs">
-                    <thead className="sticky top-0 z-30">
-                      <tr>
-                        <th
-                          rowSpan={3}
-                          className={`${TH_X} sticky left-0`}
-                          style={{ minWidth: 48, width: 48 }}
-                        >
-                          STT
-                        </th>
-                        <th
-                          rowSpan={3}
-                          className={`${TH_X} sticky text-left!`}
-                          style={{ left: 48, minWidth: 200 }}
-                        >
-                          HỌ VÀ TÊN HỌC SINH
-                        </th>
-                        <th rowSpan={3} className={`${TH_X} w-20`}>
-                          Ngày, tháng, năm sinh
-                        </th>
-                        <th rowSpan={3} className={`${TH_X} w-8`}>
-                          Nữ
-                        </th>
-                        <th colSpan={subjSpan} className={TH_X}>
-                          Môn học và hoạt động giáo dục
-                        </th>
-                        <th
-                          colSpan={traitsOf("Phẩm chất").length}
-                          className={TH_X}
-                        >
-                          {TRAIT_GROUP_TITLE["Phẩm chất"]}
-                        </th>
-                        <th colSpan={coreTraits.length} className={TH_X}>
-                          Năng lực cốt lõi
-                        </th>
-                        {isCN && (
-                          <>
-                            <th colSpan={4} rowSpan={2} className={TH_X}>
-                              Đánh giá KQGD
-                            </th>
-                            <th colSpan={2} rowSpan={2} className={TH_X}>
-                              Khen thưởng
-                            </th>
-                            <th rowSpan={3} className={`${TH_S} w-16`}>
-                              Chưa được lên lớp
-                            </th>
-                          </>
-                        )}
-                        <th rowSpan={3} className={`${TH_X} min-w-48`}>
-                          Ghi chú
-                        </th>
-                      </tr>
-                      <tr>
-                        {subjCols.map(({ sub, tested }) => (
+                  <div
+                    ref={tableRef}
+                    className={`border border-slate-300 rounded-xl overflow-auto overscroll-contain ${
+                      expanded ? "flex-1 min-h-0" : "max-h-[80vh]"
+                    }`}
+                  >
+                    <table className="border-collapse text-xs">
+                      <thead className="sticky top-0 z-30">
+                        <tr>
                           <th
-                            key={sub}
-                            colSpan={tested ? 2 : 1}
-                            className={TH_S}
-                            style={{ minWidth: tested ? 128 : 64 }}
+                            rowSpan={3}
+                            className={`${TH_X} sticky left-0`}
+                            style={{ minWidth: 48, width: 48 }}
                           >
-                            {subjectShort(sub)}
+                            STT
                           </th>
-                        ))}
-                        {traitsOf("Phẩm chất").map((t) => (
                           <th
-                            key={t.key}
-                            rowSpan={2}
-                            className={TH_S}
-                            style={{ minWidth: 64 }}
+                            rowSpan={3}
+                            className={`${TH_X} sticky text-left!`}
+                            style={{ left: 48, minWidth: 200 }}
                           >
-                            {t.key}
+                            HỌ VÀ TÊN HỌC SINH
                           </th>
-                        ))}
-                        {(["Năng lực chung", "Năng lực đặc thù"] as const).map(
-                          (g) => (
+                          <th rowSpan={3} className={`${TH_X} w-20`}>
+                            Ngày, tháng, năm sinh
+                          </th>
+                          <th rowSpan={3} className={`${TH_X} w-8`}>
+                            Nữ
+                          </th>
+                          <th colSpan={subjSpan} className={TH_X}>
+                            Môn học và hoạt động giáo dục
+                          </th>
+                          <th
+                            colSpan={traitsOf("Phẩm chất").length}
+                            className={TH_X}
+                          >
+                            {TRAIT_GROUP_TITLE["Phẩm chất"]}
+                          </th>
+                          <th colSpan={coreTraits.length} className={TH_X}>
+                            Năng lực cốt lõi
+                          </th>
+                          {isCN && (
+                            <>
+                              <th colSpan={4} rowSpan={2} className={TH_X}>
+                                Đánh giá KQGD
+                              </th>
+                              <th colSpan={2} rowSpan={2} className={TH_X}>
+                                Khen thưởng
+                              </th>
+                              <th rowSpan={3} className={`${TH_S} w-16`}>
+                                Chưa được lên lớp
+                              </th>
+                            </>
+                          )}
+                          <th rowSpan={3} className={`${TH_X} min-w-48`}>
+                            Ghi chú
+                          </th>
+                        </tr>
+                        <tr>
+                          {subjCols.map(({ sub, tested }) => (
+                            <th
+                              key={sub}
+                              colSpan={tested ? 2 : 1}
+                              className={TH_S}
+                              style={{ minWidth: tested ? 128 : 64 }}
+                            >
+                              {subjectShort(sub)}
+                            </th>
+                          ))}
+                          {traitsOf("Phẩm chất").map((t) => (
+                            <th
+                              key={t.key}
+                              rowSpan={2}
+                              className={TH_S}
+                              style={{ minWidth: 64 }}
+                            >
+                              {t.key}
+                            </th>
+                          ))}
+                          {(
+                            ["Năng lực chung", "Năng lực đặc thù"] as const
+                          ).map((g) => (
                             <th
                               key={g}
                               colSpan={traitsOf(g).length}
@@ -1734,273 +1769,273 @@ export default function AdminSemester() {
                             >
                               {TRAIT_GROUP_TITLE[g]}
                             </th>
-                          ),
-                        )}
-                      </tr>
-                      <tr>
-                        {subjCols.map(({ sub, tested }) => (
-                          <FragmentCells key={sub} tested={tested} />
-                        ))}
-                        {coreTraits.map((t) => (
-                          <th
-                            key={t.key}
-                            className={TH_S}
-                            style={{ minWidth: 64 }}
-                          >
-                            {t.key}
-                          </th>
-                        ))}
-                        {isCN && (
-                          <>
-                            {YEAR_RESULTS.map((y) => (
-                              <th
-                                key={y.key}
-                                className={TH_S}
-                                style={{ minWidth: 56 }}
-                              >
-                                {y.label}
-                              </th>
-                            ))}
-                            <th className={TH_S}>Cuối năm</th>
-                            <th className={TH_S}>Đột xuất</th>
-                          </>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredStudents.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={
-                              5 + subjSpan + TRAITS.length + (isCN ? 7 : 0)
-                            }
-                            className="text-center text-slate-400 py-8"
-                          >
-                            Không tìm thấy học sinh phù hợp.
-                          </td>
+                          ))}
                         </tr>
-                      ) : (
-                        filteredStudents.map((st, r) => {
-                          const d = data[st.id];
-                          const y = getYearEval(d);
-                          return (
-                            <tr
-                              key={st.id}
-                              className={
-                                dirty.has(st.id)
-                                  ? "bg-amber-50/50"
-                                  : "hover:bg-slate-50/80"
-                              }
+                        <tr>
+                          {subjCols.map(({ sub, tested }) => (
+                            <FragmentCells key={sub} tested={tested} />
+                          ))}
+                          {coreTraits.map((t) => (
+                            <th
+                              key={t.key}
+                              className={TH_S}
+                              style={{ minWidth: 64 }}
                             >
-                              <td
-                                className={`${TD_X} sticky left-0 z-10 bg-white text-slate-500`}
-                                style={{ minWidth: 48 }}
+                              {t.key}
+                            </th>
+                          ))}
+                          {isCN && (
+                            <>
+                              {YEAR_RESULTS.map((y) => (
+                                <th
+                                  key={y.key}
+                                  className={TH_S}
+                                  style={{ minWidth: 56 }}
+                                >
+                                  {y.label}
+                                </th>
+                              ))}
+                              <th className={TH_S}>Cuối năm</th>
+                              <th className={TH_S}>Đột xuất</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredStudents.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={
+                                5 + subjSpan + TRAITS.length + (isCN ? 7 : 0)
+                              }
+                              className="text-center text-slate-400 py-8"
+                            >
+                              Không tìm thấy học sinh phù hợp.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredStudents.map((st, r) => {
+                            const d = data[st.id];
+                            const y = getYearEval(d);
+                            return (
+                              <tr
+                                key={st.id}
+                                className={
+                                  dirty.has(st.id)
+                                    ? "bg-amber-50/50"
+                                    : "hover:bg-slate-50/80"
+                                }
                               >
-                                {r + 1}
-                              </td>
-                              <td
-                                className={`${TD_X} sticky z-10 bg-white text-left! px-2 font-medium text-slate-800 whitespace-nowrap`}
-                                style={{ left: 48, minWidth: 200 }}
-                              >
-                                {st.name}
-                              </td>
-                              <td className={`${TD_X} text-slate-600`}>
-                                {st.birthDate}
-                              </td>
-                              <td className={`${TD_X} font-bold`}>
-                                {st.female ? "X" : ""}
-                              </td>
+                                <td
+                                  className={`${TD_X} sticky left-0 z-10 bg-white text-slate-500`}
+                                  style={{ minWidth: 48 }}
+                                >
+                                  {r + 1}
+                                </td>
+                                <td
+                                  className={`${TD_X} sticky z-10 bg-white text-left! px-2 font-medium text-slate-800 whitespace-nowrap`}
+                                  style={{ left: 48, minWidth: 200 }}
+                                >
+                                  {st.name}
+                                </td>
+                                <td className={`${TD_X} text-slate-600`}>
+                                  {st.birthDate}
+                                </td>
+                                <td className={`${TD_X} font-bold`}>
+                                  {st.female ? "X" : ""}
+                                </td>
 
-                              {subjCols.map(({ sub, tested }, ci) => {
-                                const c = getCell(d, sub, period);
-                                return (
-                                  <FragmentCells key={sub} body>
-                                    <td
-                                      className={TD_X}
-                                      style={{ minWidth: 64 }}
-                                    >
-                                      <select
-                                        value={c.level}
-                                        disabled={inputsOff}
-                                        title={
-                                          c.level
-                                            ? LEVEL_LABEL[c.level]
-                                            : undefined
-                                        }
-                                        onChange={(e) =>
-                                          patchCell(st.id, sub, {
-                                            level: e.target.value as
-                                              | ""
-                                              | LevelKey,
-                                          })
-                                        }
-                                        className={`${CELL_BASE} w-16 cursor-pointer font-bold ${
-                                          c.level === "MIEN"
-                                            ? "text-[11px]"
-                                            : "text-base"
-                                        } ${c.level ? LEVEL_STYLE[c.level].on : CELL_IDLE}`}
-                                      >
-                                        <option value="">-</option>
-                                        {LEVELS.map((l) => (
-                                          <option key={l.key} value={l.key}>
-                                            {l.key === "MIEN"
-                                              ? "M"
-                                              : LEVEL_CODE[l.key]}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    {tested && (
+                                {subjCols.map(({ sub, tested }, ci) => {
+                                  const c = getCell(d, sub, period);
+                                  return (
+                                    <FragmentCells key={sub} body>
                                       <td
                                         className={TD_X}
                                         style={{ minWidth: 64 }}
                                       >
-                                        <input
-                                          data-score={`${ci}-${r}`}
-                                          type="text"
-                                          inputMode="numeric"
-                                          value={c.score}
-                                          disabled={
-                                            inputsOff || c.level === "MIEN"
+                                        <select
+                                          value={c.level}
+                                          disabled={inputsOff}
+                                          title={
+                                            c.level
+                                              ? LEVEL_LABEL[c.level]
+                                              : undefined
                                           }
-                                          onFocus={(e) => e.target.select()}
-                                          onChange={(e) => {
-                                            const v = e.target.value
-                                              .replace(/\D/g, "")
-                                              .slice(0, 2);
-                                            if (v === "" || +v <= 10)
-                                              patchCell(st.id, sub, {
-                                                score: v,
-                                              });
-                                          }}
-                                          onPaste={(e) => {
-                                            const text =
-                                              e.clipboardData.getData("text");
-                                            if (!/[\n\t]/.test(text.trim()))
-                                              return;
-                                            e.preventDefault();
-                                            pasteScores(sub, r, text);
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (
-                                              e.key === "Enter" ||
-                                              e.key === "ArrowDown"
-                                            ) {
-                                              e.preventDefault();
-                                              focusScore(ci, r + 1);
-                                            } else if (e.key === "ArrowUp") {
-                                              e.preventDefault();
-                                              focusScore(ci, r - 1);
-                                            }
-                                          }}
-                                          className={`${CELL_BASE} ${CELL_IDLE} w-16 text-base font-semibold`}
-                                        />
+                                          onChange={(e) =>
+                                            patchCell(st.id, sub, {
+                                              level: e.target.value as
+                                                | ""
+                                                | LevelKey,
+                                            })
+                                          }
+                                          className={`${CELL_BASE} w-16 cursor-pointer font-bold ${
+                                            c.level === "MIEN"
+                                              ? "text-[11px]"
+                                              : "text-base"
+                                          } ${c.level ? LEVEL_STYLE[c.level].on : CELL_IDLE}`}
+                                        >
+                                          <option value="">-</option>
+                                          {LEVELS.map((l) => (
+                                            <option key={l.key} value={l.key}>
+                                              {l.key === "MIEN"
+                                                ? "M"
+                                                : LEVEL_CODE[l.key]}
+                                            </option>
+                                          ))}
+                                        </select>
                                       </td>
-                                    )}
-                                  </FragmentCells>
-                                );
-                              })}
+                                      {tested && (
+                                        <td
+                                          className={TD_X}
+                                          style={{ minWidth: 64 }}
+                                        >
+                                          <input
+                                            data-score={`${ci}-${r}`}
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={c.score}
+                                            disabled={
+                                              inputsOff || c.level === "MIEN"
+                                            }
+                                            onFocus={(e) => e.target.select()}
+                                            onChange={(e) => {
+                                              const v = e.target.value
+                                                .replace(/\D/g, "")
+                                                .slice(0, 2);
+                                              if (v === "" || +v <= 10)
+                                                patchCell(st.id, sub, {
+                                                  score: v,
+                                                });
+                                            }}
+                                            onPaste={(e) => {
+                                              const text =
+                                                e.clipboardData.getData("text");
+                                              if (!/[\n\t]/.test(text.trim()))
+                                                return;
+                                              e.preventDefault();
+                                              pasteScores(sub, r, text);
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (
+                                                e.key === "Enter" ||
+                                                e.key === "ArrowDown"
+                                              ) {
+                                                e.preventDefault();
+                                                focusScore(ci, r + 1);
+                                              } else if (e.key === "ArrowUp") {
+                                                e.preventDefault();
+                                                focusScore(ci, r - 1);
+                                              }
+                                            }}
+                                            className={`${CELL_BASE} ${CELL_IDLE} w-16 text-base font-semibold`}
+                                          />
+                                        </td>
+                                      )}
+                                    </FragmentCells>
+                                  );
+                                })}
 
-                              {TRAITS.map((t) => {
-                                const v = getTrait(d, t.key, period);
-                                return (
-                                  <td key={t.key} className={TD_X}>
-                                    <select
-                                      value={v}
-                                      disabled={inputsOff}
-                                      title={v ? TRAIT_LABEL[v] : undefined}
-                                      onChange={(e) =>
-                                        setTraitLevel(
-                                          st.id,
-                                          t.key,
-                                          toTraitLevel(e.target.value),
-                                        )
-                                      }
-                                      className={`${CELL_BASE} w-14 cursor-pointer text-base font-bold ${
-                                        v ? TRAIT_ON[v] : CELL_IDLE
-                                      }`}
-                                    >
-                                      <option value="">-</option>
-                                      {(["T", "D", "C"] as const).map((k) => (
-                                        <option key={k} value={k}>
-                                          {TRAIT_CODE[k]}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                );
-                              })}
+                                {TRAITS.map((t) => {
+                                  const v = getTrait(d, t.key, period);
+                                  return (
+                                    <td key={t.key} className={TD_X}>
+                                      <select
+                                        value={v}
+                                        disabled={inputsOff}
+                                        title={v ? TRAIT_LABEL[v] : undefined}
+                                        onChange={(e) =>
+                                          setTraitLevel(
+                                            st.id,
+                                            t.key,
+                                            toTraitLevel(e.target.value),
+                                          )
+                                        }
+                                        className={`${CELL_BASE} w-14 cursor-pointer text-base font-bold ${
+                                          v ? TRAIT_ON[v] : CELL_IDLE
+                                        }`}
+                                      >
+                                        <option value="">-</option>
+                                        {(["T", "D", "C"] as const).map((k) => (
+                                          <option key={k} value={k}>
+                                            {TRAIT_CODE[k]}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                  );
+                                })}
 
-                              {isCN && (
-                                <>
-                                  {/* chọn một trong bốn; bấm lại để bỏ chọn */}
-                                  {YEAR_RESULTS.map((o) => (
+                                {isCN && (
+                                  <>
+                                    {/* chọn một trong bốn; bấm lại để bỏ chọn */}
+                                    {YEAR_RESULTS.map((o) => (
+                                      <CheckCell
+                                        key={o.key}
+                                        checked={y.result === o.key}
+                                        disabled={inputsOff}
+                                        onChange={() =>
+                                          patchYearEval(st.id, {
+                                            result:
+                                              y.result === o.key ? "" : o.key,
+                                          })
+                                        }
+                                      />
+                                    ))}
                                     <CheckCell
-                                      key={o.key}
-                                      checked={y.result === o.key}
+                                      checked={y.rewardEnd}
                                       disabled={inputsOff}
                                       onChange={() =>
                                         patchYearEval(st.id, {
-                                          result:
-                                            y.result === o.key ? "" : o.key,
+                                          rewardEnd: !y.rewardEnd,
                                         })
                                       }
                                     />
-                                  ))}
-                                  <CheckCell
-                                    checked={y.rewardEnd}
-                                    disabled={inputsOff}
-                                    onChange={() =>
-                                      patchYearEval(st.id, {
-                                        rewardEnd: !y.rewardEnd,
-                                      })
-                                    }
-                                  />
-                                  <CheckCell
-                                    checked={y.rewardExtra}
-                                    disabled={inputsOff}
-                                    onChange={() =>
-                                      patchYearEval(st.id, {
-                                        rewardExtra: !y.rewardExtra,
-                                      })
-                                    }
-                                  />
-                                  <CheckCell
-                                    checked={y.retained}
-                                    disabled={inputsOff}
-                                    onChange={() =>
-                                      patchYearEval(st.id, {
-                                        retained: !y.retained,
-                                      })
-                                    }
-                                  />
-                                </>
-                              )}
+                                    <CheckCell
+                                      checked={y.rewardExtra}
+                                      disabled={inputsOff}
+                                      onChange={() =>
+                                        patchYearEval(st.id, {
+                                          rewardExtra: !y.rewardExtra,
+                                        })
+                                      }
+                                    />
+                                    <CheckCell
+                                      checked={y.retained}
+                                      disabled={inputsOff}
+                                      onChange={() =>
+                                        patchYearEval(st.id, {
+                                          retained: !y.retained,
+                                        })
+                                      }
+                                    />
+                                  </>
+                                )}
 
-                              <td className={TD_X}>
-                                <input
-                                  type="text"
-                                  value={getNote(d, period)}
-                                  disabled={inputsOff}
-                                  onChange={(e) =>
-                                    setNote(st.id, e.target.value)
-                                  }
-                                  placeholder="Ghi chú..."
-                                  className={`${CELL_BASE} ${CELL_IDLE} w-full min-w-64 text-xs`}
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              needPeriod
-            )}
-          </div>
+                                <td className={TD_X}>
+                                  <input
+                                    type="text"
+                                    value={getNote(d, period)}
+                                    disabled={inputsOff}
+                                    onChange={(e) =>
+                                      setNote(st.id, e.target.value)
+                                    }
+                                    placeholder="Ghi chú..."
+                                    className={`${CELL_BASE} ${CELL_IDLE} w-full min-w-64 text-xs`}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                needPeriod
+              )}
+            </div>
+          </MaybePortal>
         ))}
 
       {/* ============ TAB: NHẬN XÉT (AI) ============ */}
@@ -2227,6 +2262,27 @@ export default function AdminSemester() {
                           </button>
                           <button
                             type="button"
+                            onClick={() =>
+                              handleDeleteComment(activeStudent.id)
+                            }
+                            disabled={
+                              locked ||
+                              !comments[activeKey]?.text?.trim() ||
+                              comments[activeKey]?.status === "final" ||
+                              aiLoadingId === activeStudent.id ||
+                              batchProgress !== null
+                            }
+                            title={
+                              comments[activeKey]?.status === "final"
+                                ? "Hãy bỏ chốt trước khi xóa"
+                                : undefined
+                            }
+                            className={BTN_ROSE}
+                          >
+                            Xóa nhận xét
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => {
                               const t = comments[activeKey]?.text;
                               if (!t) return;
@@ -2408,4 +2464,17 @@ function CheckCell({
       />
     </td>
   );
+}
+
+function MaybePortal({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  if (active && typeof document !== "undefined") {
+    return createPortal(children, document.body);
+  }
+  return <>{children}</>;
 }
