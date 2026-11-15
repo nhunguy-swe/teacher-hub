@@ -999,27 +999,31 @@ export default function AdminSemester() {
     const token = await auth.currentUser?.getIdToken();
     if (!token) throw new Error("Chưa đăng nhập");
 
-    const res = await fetch(`${API_BASE}/api/student-comment`, {
+    const activityTotal =
+      attendance.absent + attendance.late + attendance.excused;
+    const hasActivity = myLogs.length > 0 || activityTotal > 0;
+    const yearKey = getYearEval(data[st.id]).result;
+
+    const res = await fetch(`${API_BASE}/api/semester-comment`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        mode: "semester",
-        stage: "primary",
-        grade: year.grade || undefined,
         tone,
+        studentName: getGivenName(st.name),
         semesterName: year.name,
         periodName: periodLabel(p),
-        studentName: getGivenName(st.name),
-        position: st.position || "",
+        grade: year.grade || undefined,
         grades,
         traits,
         teacherNote: getNote(data[st.id], p),
-        stars: st.stars || 0,
-        points: { plus, minus, notable },
-        attendance,
+        yearResult:
+          p === "cn"
+            ? (YEAR_RESULTS.find((y) => y.key === yearKey)?.label ?? "")
+            : "",
+        activity: hasActivity ? { plus, minus, notable, ...attendance } : null,
       }),
     });
     const json = await res.json();
