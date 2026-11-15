@@ -63,6 +63,7 @@ import {
 import {
   applyImport,
   parseWorkbook,
+  periodFromSheet,
   toXlsxBuffer,
   type ImportRow,
 } from "@/lib/importPrimaryAssessment";
@@ -763,6 +764,46 @@ export default function AdminSemester() {
     );
   };
 
+  // Làm trống toàn bộ dữ liệu của mốc đang chọn (chưa lưu cho đến khi bấm "Lưu đánh giá")
+  const handleClearPeriod = async () => {
+    if (locked) return;
+    const ok = await askConfirm({
+      title: "Làm trống mốc này?",
+      message: `Toàn bộ mức, điểm, phẩm chất, năng lực và ghi chú của mốc "${periodLabel(period)}" sẽ bị xóa khỏi bảng. Các mốc khác không bị ảnh hưởng. Bạn cần bấm "Lưu đánh giá" để áp dụng.`,
+      confirmText: "Làm trống",
+      icon: "🧹",
+      tone: "rose",
+    });
+    if (!ok) return;
+
+    const updates: Record<string, StudentData> = {};
+    students.forEach((st) => {
+      let d = data[st.id] ?? emptyData();
+      subjectList.forEach((sub) => {
+        d = withCell(d, sub, period, { level: "", score: "" });
+      });
+      TRAITS.forEach((t) => {
+        d = withTrait(d, t.key, period, "");
+      });
+      d = withNote(d, period, "");
+      if (period === "cn") {
+        d = withYearEval(d, {
+          result: "",
+          rewardEnd: false,
+          rewardExtra: false,
+          retained: false,
+        });
+      }
+      updates[st.id] = d;
+    });
+
+    setData((prev) => ({ ...prev, ...updates }));
+    markDirty(Object.keys(updates));
+    toast.success(
+      `Đã làm trống mốc "${periodLabel(period)}". Bấm "Lưu đánh giá" để áp dụng!`,
+    );
+  };
+
   const focusScore = (c: number, r: number) => {
     const el = tableRef.current?.querySelector<HTMLInputElement>(
       `[data-score="${c}-${r}"]`,
@@ -872,6 +913,44 @@ export default function AdminSemester() {
 
   /* ---------- Nhập từ Excel / dán ---------- */
 
+  // Lưu ngay các học sinh vừa nhập, dùng dữ liệu truyền vào (không chờ state cập nhật)
+  const autoSaveImported = async (
+    ids: string[],
+    source: Record<string, StudentData>,
+  ) => {
+    if (!year) return;
+    setSaving(true);
+    try {
+      const batch = writeBatch(db);
+      ids.forEach((sid) => {
+        const st = students.find((s) => s.id === sid);
+        if (!st) return;
+        const stored = toStored(source[sid] ?? emptyData());
+        batch.set(doc(db, "semesterGrades", `${year.id}_${sid}`), {
+          semesterId: year.id,
+          studentId: sid,
+          name: st.name,
+          group: st.group || "",
+          subjects: stored.subjects,
+          traits: stored.traits,
+          notes: stored.notes,
+          yearEval: stored.yearEval,
+          updatedAt: serverTimestamp(),
+        });
+      });
+      await batch.commit();
+      // Chỉ bỏ đánh dấu "chưa lưu" của các học sinh vừa lưu
+      ids.forEach((sid) => dirtyRef.current.delete(sid));
+      setDirty(new Set(dirtyRef.current));
+      toast.success("Đã lưu dữ liệu nhập từ file!");
+    } catch (err) {
+      console.error(err);
+      toast.error('Nhập được nhưng chưa lưu được, hãy bấm "Lưu đánh giá"');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const runImport = (
     items: { period: PeriodKey; rows: ImportRow[] }[],
     invalid: number,
@@ -895,9 +974,8 @@ export default function AdminSemester() {
     }
     setData((prev) => ({ ...prev, ...merged }));
     markDirty(ids);
-    toast.success(
-      `Đã nhập ${matched} học sinh. Hãy kiểm tra, sửa nếu cần rồi bấm "Lưu đánh giá"!`,
-    );
+    void autoSaveImported(ids, merged);
+    toast.success(`Đã nhập ${matched} học sinh.`);
     if (unmatched.length > 0)
       toast.warning(
         `${unmatched.length} dòng không khớp tên: ${unmatched
@@ -925,16 +1003,23 @@ export default function AdminSemester() {
         .map((s) => ({ period: s.period as PeriodKey, rows: s.rows }));
       let invalid = sheets.reduce((a, s) => a + (s.period ? s.invalid : 0), 0);
       // Không sheet nào có tên GK1/CK1/GK2/CN: nhập sheet đầu tiên vào mốc đang chọn
+      let usedFallback = false;
       if (items.length === 0) {
-        items = [{ period, rows: sheets[0].rows }];
+        const guess = periodFromSheet(file.name.replace(/\.[^.]+$/, ""));
+        items = [{ period: guess ?? period, rows: sheets[0].rows }];
         invalid = sheets[0].invalid;
+        usedFallback = !guess;
       }
-      if (
-        runImport(items, invalid) &&
-        !items.some((i) => i.period === period)
-      ) {
-        setPeriod(items[0].period);
-        setPicked(true);
+      const ok = runImport(items, invalid);
+      if (ok) {
+        if (!items.some((i) => i.period === period)) {
+          setPeriod(items[0].period);
+          setPicked(true);
+        }
+        if (usedFallback)
+          toast.warning(
+            `Không nhận ra mốc từ tên sheet/tên file, đã nhập vào "${periodLabel(items[0].period)}". Nếu sai, chọn đúng mốc rồi nhập lại.`,
+          );
       }
     } catch (err) {
       console.error(err);
@@ -1619,6 +1704,14 @@ export default function AdminSemester() {
                         </button>
                       )}
                       {exportBtn}
+                      <button
+                        type="button"
+                        disabled={inputsOff}
+                        onClick={handleClearPeriod}
+                        className={BTN_ROSE}
+                      >
+                        Xóa tất cả
+                      </button>
                       <button
                         type="button"
                         onClick={handleSave}

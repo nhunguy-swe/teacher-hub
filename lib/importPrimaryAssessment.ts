@@ -125,12 +125,26 @@ export const periodFromSheet = (name: string): PeriodKey | null => {
 
   const mid = n.startsWith("giua") || n.includes("gk");
   const end = n.startsWith("cuoi") || n.includes("ck");
-  if (!mid && !end) return null;
+  if (!mid && !end) {
+    return n === "hki" || n === "hk1" ? "ck1" : null;
+  }
 
   const last = tokens[tokens.length - 1] ?? "";
   const sem = /(ii|2)$/.test(last) ? 2 : /(i|1)$/.test(last) ? 1 : 0;
   if (!sem) return null;
   return mid ? (sem === 1 ? "gk1" : "gk2") : sem === 1 ? "ck1" : null;
+};
+
+/** Nhận mốc từ dòng tiêu đề trong sheet, ví dụ "...GIÁO DỤC CUỐI HỌC KÌ I, NĂM HỌC..." */
+export const periodFromTitle = (text: string): PeriodKey | null => {
+  const t = norm(text);
+  if (!t.includes("danh gia")) return null;
+  if (t.includes("cuoi nam")) return "cn";
+  const m = t.match(/hoc ki (ii|i|2|1)\b/);
+  if (!m) return null;
+  const sem2 = m[1] === "ii" || m[1] === "2";
+  const mid = t.includes("giua");
+  return sem2 ? (mid ? "gk2" : null) : mid ? "gk1" : "ck1";
 };
 
 /** File .xls (Excel 97-2003) như mẫu 4A4: đổi sang .xlsx trước khi đọc bằng exceljs. */
@@ -293,9 +307,17 @@ export async function parseWorkbook(
       rows.push({ name, index: rows.length, cells });
     }
 
+    // Ưu tiên mốc ghi trong dòng tiêu đề (các dòng phía trên bảng), rồi mới đến tên sheet
+    let titlePeriod: PeriodKey | null = null;
+    for (let r = 1; r < headRow && !titlePeriod; r++) {
+      for (let c = 1; c <= Math.min(maxCol, 12) && !titlePeriod; c++) {
+        titlePeriod = periodFromTitle(text(r, c));
+      }
+    }
+
     out.push({
       sheet: ws.name,
-      period: periodFromSheet(ws.name),
+      period: titlePeriod ?? periodFromSheet(ws.name),
       rows,
       invalid,
     });
