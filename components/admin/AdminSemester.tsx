@@ -29,32 +29,32 @@ import {
   TRAIT_CODE,
   TRAIT_GROUP_TITLE,
   TRAIT_LABEL,
-  YEAR_RESULTS, // + thêm
+  YEAR_RESULTS,  
   defaultSubjects,
-  ensureDefaultSubjects, // + thêm
+  ensureDefaultSubjects,  
   emptyData,
   fromStored,
   getCell,
   getNote,
   getTrait,
-  getYearEval, // + thêm
+  getYearEval,  
   hasTest,
   parseScore,
   periodLabel,
-  suggestYearLevel, // + thêm
+  suggestYearLevel,  
   toStored,
   toTraitLevel,
   withCell,
   withNote,
   withTrait,
-  withYearEval, // + thêm
-  yearLevelToResult, // + thêm
+  withYearEval,  
+  yearLevelToResult,  
   type LevelKey,
   type PeriodKey,
   type StudentData,
   type SubjectCell,
   type TraitLevel,
-  type YearEval, // + thêm
+  type YearEval,  
 } from "@/lib/primaryAssessment";
 import {
   buildAssessmentWorkbook,
@@ -63,7 +63,7 @@ import {
 import {
   applyImport,
   parseWorkbook,
-  toXlsxBuffer, // + thêm
+  toXlsxBuffer,  
   type ImportRow,
 } from "@/lib/importPrimaryAssessment";
 
@@ -115,6 +115,17 @@ interface AttendanceLite {
 type Tab = "years" | "grid" | "comments";
 
 const VIEW_KEY = "adminSemester:view";
+
+interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmText?: string;
+  icon?: string;
+  tone?: "amber" | "rose";
+}
+
+// Đổi đường dẫn này theo logo thật của web (nếu sai, logo tự ẩn)
+const LOGO_SRC = "/logo.png";
 
 /* ======================= Giao diện ======================= */
 
@@ -321,6 +332,21 @@ export default function AdminSemester() {
   // đã có tab lưu sẵn thì đừng tự nhảy sang "Bảng đánh giá"
   const tabInitRef = useRef(!!saved?.tab);
 
+  const [confirmOpts, setConfirmOpts] = useState<ConfirmOptions | null>(null);
+  const confirmResolveRef = useRef<((v: boolean) => void) | null>(null);
+
+  const askConfirm = (opts: ConfirmOptions) =>
+    new Promise<boolean>((resolve) => {
+      confirmResolveRef.current = resolve;
+      setConfirmOpts(opts);
+    });
+
+  const closeConfirm = (result: boolean) => {
+    confirmResolveRef.current?.(result);
+    confirmResolveRef.current = null;
+    setConfirmOpts(null);
+  };
+
   const year = useMemo(
     () =>
       years.find((y) => y.id === selectedId) ??
@@ -506,7 +532,8 @@ export default function AdminSemester() {
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded]);
 
-  const handleSelectYear = (id: string) => {
+  // handleSelectYear -> chuyển thành async
+  const handleSelectYear = async (id: string) => {
     if (id === yearId) return;
     if (batchProgress !== null) {
       toast.warning("Đang tạo nhận xét, hãy dừng trước khi đổi năm học");
@@ -514,7 +541,13 @@ export default function AdminSemester() {
     }
     if (
       hasUnsaved &&
-      !window.confirm("Còn dữ liệu chưa lưu, đổi năm học sẽ mất. Tiếp tục?")
+      !(await askConfirm({
+        title: "Đổi năm học?",
+        message: "Còn dữ liệu chưa lưu, đổi năm học sẽ mất. Tiếp tục?",
+        confirmText: "Tiếp tục",
+        icon: "⚠️",
+        tone: "rose",
+      }))
     )
       return;
     setEditingId(null);
@@ -1035,9 +1068,16 @@ export default function AdminSemester() {
     if (locked) return;
     const p = period;
     const key = ckey(st.id, p);
+    // handleGenerateOne
     if (
       comments[key]?.text?.trim() &&
-      !window.confirm("Nhận xét hiện tại sẽ bị thay bằng bản AI mới. Tiếp tục?")
+      !(await askConfirm({
+        title: "Tạo lại nhận xét?",
+        message: "Nhận xét hiện tại sẽ bị thay bằng bản AI mới. Tiếp tục?",
+        confirmText: "Tạo lại",
+        icon: "✨",
+        tone: "amber",
+      }))
     )
       return;
     setAiLoadingId(st.id);
@@ -1208,9 +1248,24 @@ export default function AdminSemester() {
     <div className="bg-white p-6 rounded-3xl border border-amber-200 shadow-lg shadow-amber-950/5 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
-        <div>
-          <h2 className="text-xl font-bold m-0 text-slate-800">
-            Đánh giá học sinh theo năm học
+        <div className="shrink-0">
+          <h2 className="text-xl font-bold flex items-center gap-2.5 m-0 text-slate-800 whitespace-nowrap">
+            <svg
+              className="text-amber-600 shrink-0"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
+              <path d="M22 10v6" />
+              <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" />
+            </svg>
+            Học kỳ
           </h2>
         </div>
 
@@ -1219,7 +1274,7 @@ export default function AdminSemester() {
             value={year?.id || ""}
             disabled={batchProgress !== null}
             onChange={(e) => handleSelectYear(e.target.value)}
-            className={`${SELECT} w-full sm:w-64`}
+            className={`${SELECT} w-full sm:w-64 min-w-0`}
           >
             {years.map((y) => (
               <option key={y.id} value={y.id}>
@@ -1519,13 +1574,6 @@ export default function AdminSemester() {
                     >
                       {importing ? "Đang đọc..." : "Nhập file Excel"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setExpanded((v) => !v)}
-                      className={BTN_SOFT}
-                    >
-                      {expanded ? "✕ Thu nhỏ" : "⛶ Phóng to"}
-                    </button>
                     {isCN && (
                       <button
                         type="button"
@@ -1546,6 +1594,44 @@ export default function AdminSemester() {
                       {saveLabel(dirty.size, "Lưu đánh giá", saving)}
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((v) => !v)}
+                    title={expanded ? "Thu nhỏ" : "Phóng to"}
+                    className="px-3.5 py-2 text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    {expanded ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                        />
+                      </svg>
+                    )}
+                    <span>{expanded ? "Thu nhỏ" : "Phóng to"}</span>
+                  </button>
                 </div>
 
                 <p
@@ -2208,6 +2294,68 @@ export default function AdminSemester() {
                 className="flex-1 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all shadow-2xs cursor-pointer disabled:opacity-50 flex items-center justify-center"
               >
                 {deleting ? "Đang xóa..." : "Xóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POPUP XÁC NHẬN CHUNG */}
+      {confirmOpts && (
+        <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            {/* Logo web */}
+            <div className="flex items-center justify-center gap-2 pb-3 border-b border-slate-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={LOGO_SRC}
+                alt="Logo"
+                className="w-7 h-7 object-contain"
+                onError={(e) => (e.currentTarget.style.display = "none")}
+              />
+              <span className="text-xs font-extrabold text-amber-700 tracking-wide">
+                Lớp học của cô Trúc
+              </span>
+            </div>
+
+            <div
+              className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto text-xl ${
+                confirmOpts.tone === "rose"
+                  ? "bg-rose-50 text-rose-600"
+                  : "bg-amber-50 text-amber-600"
+              }`}
+            >
+              {confirmOpts.icon ?? "❓"}
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-slate-800 m-0">
+                {confirmOpts.title}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 mb-0">
+                {confirmOpts.message}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => closeConfirm(false)}
+                className="flex-1 px-4 py-2 text-xs font-bold bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => closeConfirm(true)}
+                className={`flex-1 px-4 py-2 text-xs font-bold text-white rounded-xl transition-all shadow-2xs cursor-pointer ${
+                  confirmOpts.tone === "rose"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-amber-500 hover:bg-amber-600"
+                }`}
+              >
+                {confirmOpts.confirmText ?? "Đồng ý"}
               </button>
             </div>
           </div>
