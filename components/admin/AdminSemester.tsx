@@ -2472,7 +2472,7 @@ export default function AdminSemester() {
         <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-sm p-6 space-y-4 text-center animate-in fade-in zoom-in-95 duration-200">
             {/* Logo web */}
-            <div className="flex items-center justify-center gap-2 pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-center gap-2 pt-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={LOGO_SRC}
@@ -2480,9 +2480,6 @@ export default function AdminSemester() {
                 className="w-7 h-7 object-contain"
                 onError={(e) => (e.currentTarget.style.display = "none")}
               />
-              <span className="text-xs font-extrabold text-amber-700 tracking-wide">
-                Lớp học của cô Trúc
-              </span>
             </div>
 
             <div
