@@ -11,10 +11,10 @@ interface GeminiPart {
   thought?: boolean;
 }
 
-const MODELS = [
-  "gemini-2.5-flash",
-  "gemini-3.5-flash",
-  "gemini-3-flash-preview",
+const MODELS: { name: string; thinking: Record<string, unknown> }[] = [
+  { name: "gemini-2.5-flash", thinking: { thinkingBudget: 0 } },
+  { name: "gemini-3-flash-preview", thinking: { thinkingLevel: "minimal" } },
+  { name: "gemini-3.5-flash", thinking: { thinkingLevel: "minimal" } },
 ];
 
 const corsHeaders = {
@@ -30,11 +30,17 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders });
 }
 
-/** Kiểm tra Firebase ID token qua REST, không cần firebase-admin. */
+// Cache token 5 phút để chạy cả lớp không phải xác thực lại mỗi em
+const tokenCache = new Map<string, number>();
+
 async function isSignedIn(req: Request): Promise<boolean> {
   const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   if (!token || !key) return false;
+
+  const exp = tokenCache.get(token);
+  if (exp && exp > Date.now()) return true;
+
   try {
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${key}`,
@@ -42,8 +48,13 @@ async function isSignedIn(req: Request): Promise<boolean> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken: token }),
+        signal: AbortSignal.timeout(8000),
       },
     );
+    if (res.ok) {
+      if (tokenCache.size > 200) tokenCache.clear();
+      tokenCache.set(token, Date.now() + 5 * 60_000);
+    }
     return res.ok;
   } catch {
     return false;
@@ -70,22 +81,33 @@ export async function POST(req: Request) {
     let partialText = "";
     let lastError = "";
 
-    for (const model of MODELS) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
+    for (const { name: model, thinking } of MODELS) {
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey,
+            },
+            signal: AbortSignal.timeout(10000),
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: system }] },
+              contents: [{ role: "user", parts: [{ text: user }] }],
+              generationConfig: {
+                maxOutputTokens: 1024,
+                temperature: 0.7,
+                thinkingConfig: thinking,
+              },
+            }),
           },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents: [{ role: "user", parts: [{ text: user }] }],
-            generationConfig: { maxOutputTokens: 4096, temperature: 0.7 },
-          }),
-        },
-      );
+        );
+      } catch {
+        lastError = `${model} → timeout/network`;
+        continue;
+      }
 
       if (!res.ok) {
         lastError = `${model} → ${res.status}: ${(await res.text()).slice(0, 200)}`;
@@ -93,7 +115,13 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        lastError = `${model} → đọc phản hồi lỗi/timeout`;
+        continue;
+      }
       const candidate = data.candidates?.[0];
       const finishReason: string = candidate?.finishReason || "";
 

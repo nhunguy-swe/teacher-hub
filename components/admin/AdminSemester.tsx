@@ -114,6 +114,8 @@ interface AttendanceLite {
   date: string;
 }
 
+type Ctx = { key: string; logs: ActivityLogLite[]; att: AttendanceLite[] };
+
 type Tab = "years" | "grid" | "comments";
 
 const VIEW_KEY = "adminSemester:view";
@@ -324,11 +326,7 @@ export default function AdminSemester() {
     total: number;
   } | null>(null);
   const cancelBatchRef = useRef(false);
-  const ctxRef = useRef<{
-    key: string;
-    logs: ActivityLogLite[];
-    att: AttendanceLite[];
-  } | null>(null);
+  const ctxRef = useRef<{ key: string; promise: Promise<Ctx> } | null>(null);
 
   const tableRef = useRef<HTMLDivElement>(null);
   // đã có tab lưu sẵn thì đừng tự nhảy sang "Bảng đánh giá"
@@ -1046,38 +1044,46 @@ export default function AdminSemester() {
     markCommentDirty(key);
   };
 
-  const loadContext = async () => {
-    if (!year) throw new Error("no year");
+  const loadContext = (): Promise<Ctx> => {
+    if (!year) return Promise.reject(new Error("no year"));
     const today = getTodayKey();
     const endKey = today < year.endDate ? today : year.endDate;
     const cacheKey = `${year.id}|${endKey}`;
-    if (ctxRef.current?.key === cacheKey) return ctxRef.current;
+    if (ctxRef.current?.key === cacheKey) return ctxRef.current.promise;
 
-    const start = new Date(`${year.startDate}T00:00:00`);
-    const end = new Date(`${endKey}T23:59:59`);
-    const [logSnap, attSnap] = await Promise.all([
-      getDocs(
-        query(
-          collection(db, "activityLog"),
-          where("createdAt", ">=", Timestamp.fromDate(start)),
-          where("createdAt", "<=", Timestamp.fromDate(end)),
-          orderBy("createdAt", "desc"),
+    const promise = (async (): Promise<Ctx> => {
+      const start = new Date(`${year.startDate}T00:00:00`);
+      const end = new Date(`${endKey}T23:59:59`);
+      const [logSnap, attSnap] = await Promise.all([
+        getDocs(
+          query(
+            collection(db, "activityLog"),
+            where("createdAt", ">=", Timestamp.fromDate(start)),
+            where("createdAt", "<=", Timestamp.fromDate(end)),
+            orderBy("createdAt", "desc"),
+          ),
         ),
-      ),
-      getDocs(
-        query(
-          collection(db, "attendanceRecords"),
-          where("date", ">=", year.startDate),
-          where("date", "<=", endKey),
+        getDocs(
+          query(
+            collection(db, "attendanceRecords"),
+            where("date", ">=", year.startDate),
+            where("date", "<=", endKey),
+          ),
         ),
-      ),
-    ]);
-    ctxRef.current = {
-      key: cacheKey,
-      logs: logSnap.docs.map((d) => d.data() as ActivityLogLite),
-      att: attSnap.docs.map((d) => d.data() as AttendanceLite),
-    };
-    return ctxRef.current;
+      ]);
+      return {
+        key: cacheKey,
+        logs: logSnap.docs.map((d) => d.data() as ActivityLogLite),
+        att: attSnap.docs.map((d) => d.data() as AttendanceLite),
+      };
+    })();
+
+    ctxRef.current = { key: cacheKey, promise };
+    // Nếu tải lỗi thì xóa cache để lần sau thử lại
+    promise.catch(() => {
+      if (ctxRef.current?.promise === promise) ctxRef.current = null;
+    });
+    return promise;
   };
 
   const generateComment = async (st: StudentItem, p: PeriodKey) => {
@@ -1207,21 +1213,33 @@ export default function AdminSemester() {
     cancelBatchRef.current = false;
     setBatchProgress({ done: 0, total: targets.length });
     let failed = 0;
-    for (let i = 0; i < targets.length; i++) {
-      if (cancelBatchRef.current) break;
-      try {
-        const text = await generateComment(targets[i], p);
-        const key = ckey(targets[i].id, p);
-        setComments((prev) => ({
-          ...prev,
-          [key]: { text, source: "ai", status: "draft" },
-        }));
-        markCommentDirty(key);
-      } catch {
-        failed++;
+    let next = 0;
+    let done = 0;
+
+    const worker = async () => {
+      while (!cancelBatchRef.current) {
+        const i = next++;
+        if (i >= targets.length) return;
+        const st = targets[i];
+        try {
+          const text = await generateComment(st, p);
+          const key = ckey(st.id, p);
+          setComments((prev) => ({
+            ...prev,
+            [key]: { text, source: "ai", status: "draft" },
+          }));
+          markCommentDirty(key);
+        } catch {
+          failed++;
+        }
+        done++;
+        setBatchProgress({ done, total: targets.length });
       }
-      setBatchProgress({ done: i + 1, total: targets.length });
-    }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(4, targets.length) }, worker),
+    );
     setBatchProgress(null);
     if (failed > 0) toast.warning(`${failed} học sinh tạo lỗi, hãy thử lại`);
     else toast.success("Đã tạo xong nhận xét. Hãy xem lại rồi lưu!");
